@@ -24,6 +24,7 @@
 |---|---|
 | [docs/spec.md](docs/spec.md) | Техническое задание v0.4 |
 | [docs/PLAN.md](docs/PLAN.md) | План: волны нарядов и шлюзы приёмки |
+| [docs/config.md](docs/config.md) | Конфигурация: razkadr.toml, ключи/BYOK, тарифы, кэш |
 | [docs/adr/](docs/adr/) | Архитектурные решения |
 | [docs/limitations.md](docs/limitations.md) | Честные границы |
 | [docs/naryady/](docs/naryady/) | Наряды (задачи с контрактом) |

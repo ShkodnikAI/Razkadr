@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "frames": [
+    {
+      "t": 0.0,
+      "file": "frames/000000.jpg",
+      "scene_id": 0,
+      "sharpness": 0.81,
+      "phash": "e2a1c4b8099d3f77",
+      "exposure": 0.9
+    },
+    {
+      "t": 6.4,
+      "file": "frames/000064.jpg",
+      "scene_id": 1,
+      "sharpness": 0.74,
+      "phash": "b19c02ee5d7a4c81",
+      "exposure": 0.82
+    },
+    {
+      "t": 12.9,
+      "file": "frames/000129.jpg",
+      "scene_id": 2,
+      "sharpness": 0.35,
+      "phash": "c30d7711aa9e6b52",
+      "exposure": 0.66
+    }
+  ]
+}

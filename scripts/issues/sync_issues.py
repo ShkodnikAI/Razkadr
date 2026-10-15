@@ -86,7 +86,7 @@ def render_gate(g):
 
 def api(repo, method, path, data=None):
     url = f"https://api.github.com/repos/{repo}{path}"
-    hdr = {"Accept": "application/vnd.github+json", "User-Agent": "razkadr-sync"}
+    hdr = {"Accept": "application/vnd.github+json", "User-Agent": "razkadr-sync", "Content-Type": "application/json"}
     if os.environ.get("GITHUB_TOKEN"):
         hdr["Authorization"] = "Bearer " + os.environ["GITHUB_TOKEN"]
     req = urllib.request.Request(url, method=method, headers=hdr,

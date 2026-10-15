@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "id": "shakshuka-2026-10-01",
+    "title": "Шакшука на сковороде",
+    "preset": "recipe",
+    "output_lang": "ru"
+  },
+  "sources": [
+    {
+      "id": "v1",
+      "path": "runs/shakshuka/source.mp4",
+      "duration_s": 840.5,
+      "detected_lang": "ru"
+    }
+  ],
+  "episodes": [
+    {
+      "id": "e1",
+      "role": "hero",
+      "source_id": "v1",
+      "t_start": 780.0,
+      "t_end": 800.0,
+      "frame": {
+        "path": "frames/my-favorite-hero-shot.jpg",
+        "t": 792.0,
+        "score": 0.91,
+        "score_parts": { "sharpness": 0.88, "aesthetic": 0.95, "relevance": 0.9 }
+      },
+      "alternatives": [],
+      "text": {
+        "mode": "verbatim",
+        "source_lang": "ru",
+        "original": "Вот такая красота у нас получилась.",
+        "output": "Вот такая красота у нас получилась — подавайте горячей, с хлебом.",
+        "output_lang": "ru"
+      },
+      "user_edited": true
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "id": "shakshuka-2026-10-01",
+    "title": "Шакшука на сковороде",
+    "preset": "recipe",
+    "output_lang": "ru"
+  },
+  "sources": [
+    {
+      "id": "v1",
+      "path": "runs/shakshuka/source.mp4",
+      "duration_s": 840.5,
+      "detected_lang": "ru"
+    }
+  ],
+  "episodes": [
+    {
+      "id": "e1",
+      "role": "hero",
+      "source_id": "v1",
+      "t_start": 780.0,
+      "t_end": 800.0,
+      "frame": {
+        "t": 787.0,
+        "score": 0.91
+      },
+      "alternatives": [],
+      "text": {
+        "mode": "described",
+        "output_lang": "ru"
+      },
+      "user_edited": false
+    }
+  ]
+}

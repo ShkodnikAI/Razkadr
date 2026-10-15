@@ -38,15 +38,9 @@ pip install -e ".[dev]"
 pytest
 ```
 
-## Публикация на GitHub
+## Репозиторий
 
-Репозиторий создан локально с историей коммитов. Чтобы опубликовать:
-
-```bash
-gh repo create razkadr --private --source=. --remote=origin --push
-```
-
-После этого завести issues для нарядов волны 0 из `docs/naryady/` (шаблон `.github/ISSUE_TEMPLATE/naryad.md`).
+https://github.com/ShkodnikAI/Razkadr. Задачи (наряды) оформляются по шаблону `.github/ISSUE_TEMPLATE/naryad.md`, файлы нарядов лежат в `docs/naryady/`.
 
 ## Как работаем
 

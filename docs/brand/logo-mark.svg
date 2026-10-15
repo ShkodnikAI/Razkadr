@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Raskadr">
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#16213A"/>
+  <g fill="none" stroke="#FF8A3D" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M62 106V82a20 20 0 0 1 20-20h24"/>
+    <path d="M194 106V82a20 20 0 0 0-20-20h-24"/>
+    <path d="M62 150v24a20 20 0 0 0 20 20h24"/>
+    <path d="M194 150v24a20 20 0 0 1-20 20h-24"/>
+  </g>
+  <path d="M112 102L158 128L112 154Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="10" stroke-linejoin="round"/>
+</svg>

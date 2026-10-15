@@ -1,11 +1,12 @@
 """Command line entry point.
 
-Subcommands: validate (real, naryad 002/035), index (real: ingest +
-frames + transcript + chunks + ocr + embeddings index, naryads 005-010;
-the full pipeline glues in naryad 011) and stubs for the remaining
-pipeline commands (select/text/build/eval/eval-check) with a unified
-interface --config/--force/--runs-dir/--resume; their logic arrives with
-later naryads.
+Subcommands: validate (real, naryad 002/035), index (the full indexing
+pipeline: ingest + frames + transcript + chunks + ocr + embeddings index,
+naryads 005-010 glued together with cache, resume and a final summary in
+naryad 011) and stubs for the remaining pipeline commands
+(select/text/build/eval/eval-check) with a unified interface
+--config/--force/--runs-dir/--resume; their logic arrives with later
+naryads.
 Exit codes: 0 ok, 1 invalid document, 2 file/IO error, 3 command not
 implemented.
 """
@@ -61,13 +62,22 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _cmd_index(args: argparse.Namespace) -> int:
-    """Pipeline stages: ingest (005), frames (006), transcript (007),
-    chunks (008), ocr (009), embeddings index (010).
+def _fmt_amount(amount: float) -> str:
+    """Cost for the console: 6-decimal precision, trailing zeros trimmed."""
+    return f"{amount:.6f}".rstrip("0").rstrip(".")
 
-    The full pipeline (cache, resume) arrives with naryad 011; here the
-    command runs the implemented prefix of stages. Stage and provider
-    failures print a clear message and exit 2.
+
+def _cmd_index(args: argparse.Namespace) -> int:
+    """The indexing pipeline (naryad 011): ingest (005), frames (006),
+    transcript (007), chunks (008), ocr (009), embeddings index (010).
+
+    Stages run in order through RunContext; each stage is cached by its
+    inputs+params and a re-run with --resume RUN_ID continues from the
+    failed stage without recomputing the earlier ones (--force re-runs
+    everything). After a successful run run.json carries the final
+    summary (stage times, provider cost, artifact counts) and the console
+    prints it. Stage and provider failures print a clear message, the
+    resume hint and exit 2.
     """
     from razkadr.config import load_config
     from razkadr.providers.base import ProviderError
@@ -81,6 +91,12 @@ def _cmd_index(args: argparse.Namespace) -> int:
 
     config = load_config(args.config)
     runs_dir = args.runs_dir or config.get("runs_dir", "runs")
+    if args.resume and not (Path(runs_dir) / args.resume / "run.json").is_file():
+        print(
+            f"razkadr index: nothing to resume: {runs_dir}/{args.resume} has no run.json",
+            file=sys.stderr,
+        )
+        return EXIT_FILE_ERROR
     ctx = RunContext(runs_dir, run_id=args.resume, config=config, force=args.force)
     try:
         source = run_ingest(ctx, args.input, config)
@@ -91,6 +107,10 @@ def _cmd_index(args: argparse.Namespace) -> int:
         manifest, space_counts = run_index(ctx, config)
     except (IngestError, FramesError, TranscriptError, ChunksError, OcrError, IndexStageError, ProviderError) as exc:
         print(f"razkadr index: {exc}", file=sys.stderr)
+        last = ctx.stages[-1] if ctx.stages else None
+        if last and last.get("status") == "failed":
+            print(f"  run {ctx.run_id} stopped at stage '{last['name']}'", file=sys.stderr)
+            print(f"  resume: razkadr index {args.input} --resume {ctx.run_id}", file=sys.stderr)
         return EXIT_FILE_ERROR
     has_audio = (ctx.dir / "audio.wav").is_file()
     audio = "audio.wav" if has_audio else "none (source has no audio track)"
@@ -104,6 +124,21 @@ def _cmd_index(args: argparse.Namespace) -> int:
     plan = plan_ocr_candidates(frames_doc, ctx.dir, ocr_params(config)) if vlm_configured else []
     sent = len(plan)
     share = sent / accepted if accepted else 0.0
+    transcript_s = sum(s["t_end"] - s["t_start"] for s in transcript_doc["segments"])
+    # the final summary goes into run.json (schema run.v1.1) before printing
+    summary = ctx.write_summary(
+        artifacts={
+            "frames_candidates": len(frames),
+            "frames_accepted": accepted,
+            "frames_rejected": len(rejected),
+            "ocr_results": len(ocr_doc["results"]),
+            "ocr_frames_sent": sent,
+            "transcript_segments": len(transcript_doc["segments"]),
+            "transcript_s": round(transcript_s, 3),
+            "chunks": len(chunks_doc["chunks"]),
+            "index_vectors": manifest["num_vectors"] if manifest else 0,
+        }
+    )
     stage_line = "ingest ok, frames ok, transcript ok, chunks ok, ocr ok"
     stage_line += ", index ok" if manifest is not None else ", index skipped"
     print(f"run {ctx.run_id}: {stage_line}")
@@ -119,7 +154,7 @@ def _cmd_index(args: argparse.Namespace) -> int:
     )
     if has_audio:
         print(
-            f"  transcript: lang={transcript_doc['lang']}, {len(transcript_doc['segments'])} segments"
+            f"  transcript: lang={transcript_doc['lang']}, {len(transcript_doc['segments'])} segments, {round(transcript_s, 1):g}s"
         )
         print(f"  chunks:     {len(chunks_doc['chunks'])}")
     if manifest is not None:
@@ -132,6 +167,16 @@ def _cmd_index(args: argparse.Namespace) -> int:
         )
     else:
         print("  index:      skipped (nothing to embed or no [embeddings] provider)")
+    cost = summary["provider_cost"]
+    if cost["calls"]:
+        print(
+            f"  cost:       {_fmt_amount(cost['amount'])} {cost['currency']} "
+            f"({cost['calls']} calls, {cost['cache_hits']} cache hits)"
+        )
+    else:
+        print("  cost:       0 (no provider calls)")
+    times = summary["stage_times_s"]
+    print("  time:       " + ", ".join(f"{name} {times[name]:g}s" for name in times))
     print(f"  dir:        {ctx.dir}")
     return EXIT_OK
 
@@ -177,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_index = sub.add_parser(
         "index",
-        help="Ingest a video, extract frames, transcribe, chunk the text, OCR captions, embed (naryads No005-No010)",
+        help="Ingest a video, extract frames, transcribe, chunk the text, OCR captions, embed (naryads No005-No011)",
     )
     p_index.add_argument("input", help="Path to a video file, or a URL for yt-dlp")
     _add_common_args(p_index)

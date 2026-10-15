@@ -199,6 +199,81 @@ def test_secret_config_keys_excluded_from_config_hash():
         del os.environ["RAZKADR_PRESET"]
 
 
+# --- final summary (naryad 011) -----------------------------------------------
+
+def test_write_summary_written_and_schema_valid(tmp_path):
+    runs_dir = tmp_path / "runs"
+    ctx = RunContext(runs_dir, config={"preset": "recipe"})
+    with ctx.stage("ingest", inputs={"src": "x"}):
+        pass
+    ctx.record_provider_call(
+        stage="transcript", provider="fake", model="fake-nova-2",
+        units=[{"kind": "seconds", "value": 30.0}],
+        cost_amount=0.472, currency="USD", tariff_date="2026-10-01", cache_hit=False,
+    )
+    summary = ctx.write_summary(artifacts={"frames_accepted": 12, "chunks": 3})
+    data = read_run_json(runs_dir, ctx.run_id)
+    assert validate_document(data, "run") == []
+    assert data["summary"] == summary
+    assert summary["stage_times_s"] == {"ingest": data["stages"][0]["duration_s"]}
+    cost = summary["provider_cost"]
+    assert cost["amount"] == 0.472
+    assert cost["calls"] == 1 and cost["cache_hits"] == 0
+    assert cost["currency"] == "USD"
+    assert cost["by_stage"] == {"transcript": 0.472}
+    assert summary["artifacts"] == {"frames_accepted": 12, "chunks": 3}
+
+
+def test_write_summary_no_provider_calls(tmp_path):
+    """A CPU-only run: zero cost, no currency (nothing was billed)."""
+    ctx = RunContext(tmp_path / "runs")
+    summary = ctx.write_summary()
+    assert validate_document(read_run_json(tmp_path / "runs", ctx.run_id), "run") == []
+    assert summary["provider_cost"] == {"amount": 0.0, "calls": 0, "cache_hits": 0, "by_stage": {}}
+    assert "currency" not in summary["provider_cost"]
+    assert summary["stage_times_s"] == {} and summary["artifacts"] == {}
+
+
+def test_write_summary_mixed_currencies_rejected(tmp_path):
+    ctx = RunContext(tmp_path / "runs")
+    for currency in ("USD", "EUR"):
+        ctx.record_provider_call(
+            stage="transcript", provider="p", model="m",
+            units=[{"kind": "tokens", "value": 1}],
+            cost_amount=0.1, currency=currency, tariff_date="2026-10-01", cache_hit=False,
+        )
+    with pytest.raises(ValueError, match="mixed currencies"):
+        ctx.write_summary()
+
+
+def test_write_summary_uses_last_completed_attempt(tmp_path):
+    """Resume: the last completed attempt counts; failed attempts have no duration."""
+    runs_dir = tmp_path / "runs"
+    ctx = RunContext(runs_dir)
+    with ctx.stage("transcript", inputs={"a": 1}):
+        pass
+    with pytest.raises(RuntimeError), ctx.stage("transcript", inputs={"a": 1}):
+        raise RuntimeError("boom")
+    resumed = RunContext(runs_dir, run_id=ctx.run_id)
+    with resumed.stage("transcript", inputs={"a": 1}) as st:
+        assert st.cached
+    summary = resumed.write_summary()
+    data = read_run_json(runs_dir, ctx.run_id)
+    assert [s["status"] for s in data["stages"]] == ["ok", "failed", "cached"]
+    completed = [s["duration_s"] for s in data["stages"] if s["status"] != "failed"]
+    assert summary["stage_times_s"]["transcript"] == completed[-1]
+
+
+def test_write_summary_rejects_bad_artifacts(tmp_path):
+    ctx = RunContext(tmp_path / "runs")
+    with pytest.raises(ValueError, match="must be a number"):
+        ctx.write_summary(artifacts={"frames": "many"})
+    with pytest.raises(ValueError, match="must be a number"):
+        ctx.write_summary(artifacts={"frames": -1})
+    with pytest.raises(ValueError, match="must be a number"):
+        ctx.write_summary(artifacts={"frames": True})
+
+
 # --- helpers -----------------------------------------------------------------
 
 def test_fingerprint_stable_and_file_sha256(tmp_path):

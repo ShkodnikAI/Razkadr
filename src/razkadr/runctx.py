@@ -89,6 +89,7 @@ class RunContext:
         self.tool_versions: dict[str, str] = {"python": platform.python_version()}
         self.stages: list[dict] = []
         self.provider_calls: list[dict] = []
+        self._summary: dict | None = None
         self._load_existing_run()
         self._write_run_json()
 
@@ -125,6 +126,54 @@ class RunContext:
             self._write_marker(name, key)
         self._record_stage(name, status=status, started=started, duration_s=round(duration, 3))
         logger.info("stage done", extra={"fields": {"stage": name, "status": status, "duration_s": round(duration, 3)}})
+
+    def write_summary(self, artifacts: dict[str, float] | None = None) -> dict:
+        """Write the final run summary into run.json (naryad 011) and return it.
+
+        Called once by the command after every stage has finished. Three
+        blocks: ``stage_times_s`` (last completed attempt per stage),
+        ``provider_cost`` (provider_calls aggregated) and ``artifacts``
+        (key artifact numbers passed by the caller). A failed run gets no
+        summary; the stage log and call accounting above are enough to
+        diagnose it.
+        """
+        stage_times: dict[str, float] = {}
+        for entry in self.stages:
+            if entry.get("status") == "failed" or entry.get("duration_s") is None:
+                continue
+            stage_times[entry["name"]] = entry["duration_s"]  # later entries overwrite
+
+        currencies = {c["cost"]["currency"] for c in self.provider_calls}
+        if len(currencies) > 1:
+            raise ValueError(f"mixed currencies in provider calls: {sorted(currencies)}")
+        by_stage: dict[str, float] = {}
+        total = 0.0
+        for call in self.provider_calls:
+            amount = call["cost"]["amount"]
+            total += amount
+            by_stage[call["stage"]] = round(by_stage.get(call["stage"], 0.0) + amount, 6)
+        provider_cost: dict = {
+            "amount": round(total, 6),
+            "calls": len(self.provider_calls),
+            "cache_hits": sum(1 for c in self.provider_calls if c["cache_hit"]),
+            "by_stage": by_stage,
+        }
+        if currencies:
+            provider_cost["currency"] = next(iter(currencies))
+
+        artifact_counts: dict[str, float] = {}
+        for name, value in (artifacts or {}).items():
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"summary artifact {name!r} must be a number >= 0, got {value!r}")
+            artifact_counts[name] = value
+
+        self._summary = {
+            "stage_times_s": stage_times,
+            "provider_cost": provider_cost,
+            "artifacts": artifact_counts,
+        }
+        self._write_run_json()
+        return self._summary
 
     def record_provider_call(
         self,
@@ -214,7 +263,7 @@ class RunContext:
 
     def _write_run_json(self) -> None:
         data = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "run_id": self.run_id,
             "created_utc": self.created_utc,
             "razkadr_version": __version__,
@@ -223,6 +272,8 @@ class RunContext:
             "stages": self.stages,
             "provider_calls": self.provider_calls,
         }
+        if self._summary is not None:
+            data["summary"] = self._summary
         self._write_json(self.dir / RUN_JSON, data)
 
     def _write_json(self, path: Path, data: object) -> None:

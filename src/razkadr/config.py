@@ -36,26 +36,36 @@ def find_config_file(explicit: str | Path | None = None) -> Path | None:
     return None
 
 
+def _absorb_secrets(node: dict, prefix: str = "") -> dict:
+    """Return a copy of node with secret-named values moved to the registry."""
+    result: dict = {}
+    for key, value in node.items():
+        if isinstance(value, dict):
+            result[key] = _absorb_secrets(value, prefix=f"{prefix}{key}.")
+        elif is_secret_name(key):
+            SECRETS.store(f"{prefix}{key}", value)
+        else:
+            result[key] = value
+    return result
+
+
 def load_config(explicit: str | Path | None = None) -> dict:
     """Effective config: defaults <- toml file <- RAZKADR_* env vars.
 
-    Secret-valued keys are masked out of the result; their values are
-    registered in the secret registry (never logged, never hashed).
+    Secret-valued keys (any nesting level) are removed from the result and
+    stored in the secret registry under a dotted name (e.g. ``asr.api_key``):
+    they never reach the config hash, logs or artifacts.
     """
     effective = dict(DEFAULT_CONFIG)
     config_file = find_config_file(explicit)
     if config_file is not None:
-        for key, value in _read_toml(config_file).items():
-            if is_secret_name(key):
-                SECRETS.register(value)
-            else:
-                effective[key] = value
+        effective.update(_absorb_secrets(_read_toml(config_file)))
     for env_name, env_value in os.environ.items():
         if not env_name.startswith(ENV_PREFIX) or len(env_name) <= len(ENV_PREFIX):
             continue
         key = env_name[len(ENV_PREFIX):].lower()
         if is_secret_name(env_name):
-            SECRETS.register(env_value)
+            SECRETS.store(env_name, env_value)
         else:
             effective[key] = env_value
     return effective

@@ -29,7 +29,7 @@ from pathlib import Path
 
 from razkadr import __version__
 from razkadr.config import config_hash
-from razkadr.log import SECRETS, get_logger
+from razkadr.log import SECRETS, deep_mask, get_logger
 
 logger = get_logger("runctx")
 
@@ -214,8 +214,8 @@ class RunContext:
         self._write_json(self.dir / RUN_JSON, data)
 
     def _write_json(self, path: Path, data: object) -> None:
-        """Atomic write; the serialized text is masked against registered secrets."""
-        text = SECRETS.mask(canonical_json(data))
+        """Atomic write; values masked before serialization (and the line after)."""
+        text = SECRETS.mask(canonical_json(deep_mask(data)))
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(text + "\n", encoding="utf-8")
         os.replace(tmp, path)

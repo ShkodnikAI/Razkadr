@@ -22,6 +22,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "ffmpeg: media tests that need the ffmpeg/ffprobe binaries; skipped when absent",
+]
 
 [tool.ruff]
 line-length = 100

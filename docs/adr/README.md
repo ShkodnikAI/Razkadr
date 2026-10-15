@@ -7,5 +7,7 @@
 | [0001](0001-python-only-until-web.md) | Python-only до веб-оболочки | accepted |
 | [0002](0002-embedding-model.md) | Подход к эмбеддингам | proposed (решение по данным волны 2) |
 | [0003](0003-pptx-master-format.md) | PPTX как мастер-формат презентаций | accepted |
-| [0004](0004-external-models-byok.md) | Только внешние модели; BYOK | accepted (провайдеры определяет наряд 004) |
+| [0004](0004-external-models-byok.md) | Только внешние модели; BYOK | accepted (провайдеры определяет наряд #4) |
 | [0005](0005-video-by-url.md) | Видео по ссылкам | accepted для CLI; для хостед-сервиса deferred |
+| 0006 | Провайдеры по умолчанию (будет создан в наряде #4) | planned |
+| 0007 | VectorStore ядра: SQLite + numpy; pgvector позже (будет создан в наряде #10) | planned |

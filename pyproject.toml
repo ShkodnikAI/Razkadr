@@ -9,7 +9,7 @@ description = "Video in, deck out: video -> storyboard -> presentation"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
-dependencies = ["jsonschema>=4"]
+dependencies = ["jsonschema>=4", "yt-dlp"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]

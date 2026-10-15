@@ -86,10 +86,22 @@ class RunContext:
         self.dir.mkdir(parents=True, exist_ok=True)
         (self.dir / CACHE_DIRNAME).mkdir(exist_ok=True)
         self.created_utc = utcnow_iso()
+        self.tool_versions: dict[str, str] = {"python": platform.python_version()}
         self.stages: list[dict] = []
         self.provider_calls: list[dict] = []
         self._load_existing_run()
         self._write_run_json()
+
+    def register_tool(self, name: str, version: str) -> None:
+        """Register an external tool version for run.json tool_versions.
+
+        Stages call this for the tools they invoke (ingest: ffmpeg, yt-dlp;
+        naryad 005). The run schema (run.v1.json) keeps tool_versions as a
+        free string map for exactly this purpose.
+        """
+        if not name or not version:
+            raise ValueError("tool name and version must be non-empty")
+        self.tool_versions[name] = str(version)
 
     # -- public API ----------------------------------------------------------
 
@@ -207,7 +219,7 @@ class RunContext:
             "created_utc": self.created_utc,
             "razkadr_version": __version__,
             "config_hash": config_hash(self.config),
-            "tool_versions": {"python": platform.python_version()},
+            "tool_versions": dict(self.tool_versions),
             "stages": self.stages,
             "provider_calls": self.provider_calls,
         }

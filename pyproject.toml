@@ -9,7 +9,16 @@ description = "Video in, deck out: video -> storyboard -> presentation"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
-dependencies = ["jsonschema>=4", "yt-dlp"]
+dependencies = [
+    "jsonschema>=4",
+    "yt-dlp",
+    # frames stage (naryad 006): scene detection, metrics, perceptual hashing
+    "scenedetect>=0.7",
+    # headless build avoids GUI deps on servers/CI; the full opencv-python
+    # pulled by scenedetect can also be present - both provide the same cv2
+    "opencv-python-headless>=4.8",
+    "imagehash>=4.3",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://razkadr.dev/schemas/source.v1.json",
+  "title": "Razkadr source artifact",
+  "description": "Ingest stage output (naryad 005): normalized video properties and provenance. See docs/artifacts.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "path", "sha256", "duration_s", "fps", "width", "height"],
+  "properties": {
+    "schema_version": { "$ref": "#/$defs/schemaVersion" },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Local path of the video the pipeline processes (the normalized file, typically normalized.mp4)."
+    },
+    "url": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Original URL the video was ingested from, when applicable."
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 of the file at path; cache key for all later stages."
+    },
+    "duration_s": { "type": "number", "minimum": 0, "description": "Duration in seconds." },
+    "fps": { "type": "number", "exclusiveMinimum": 0, "description": "Frame rate." },
+    "width": { "type": "integer", "exclusiveMinimum": 0, "description": "Frame width, pixels." },
+    "height": { "type": "integer", "exclusiveMinimum": 0, "description": "Frame height, pixels." },
+    "streams": {
+      "type": "array",
+      "description": "Media streams of the file.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "type", "codec"],
+        "properties": {
+          "index": { "type": "integer", "minimum": 0, "description": "Stream index in the container." },
+          "type": { "type": "string", "enum": ["video", "audio", "subtitle"] },
+          "codec": { "type": "string", "minLength": 1, "description": "Codec name as reported by ffprobe." },
+          "language": { "$ref": "#/$defs/lang" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "Artifact schema version, semver (patch may be omitted)."
+    },
+    "lang": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$",
+      "description": "BCP-47 language tag (und allowed for undetermined)."
+    }
+  }
+}

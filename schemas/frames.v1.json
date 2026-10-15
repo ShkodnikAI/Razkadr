@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://razkadr.dev/schemas/frames.v1.json",
+  "title": "Razkadr frames artifact",
+  "description": "Frames stage output (naryad 006): sampled frames with scene, sharpness, phash and exposure. See docs/artifacts.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "frames"],
+  "properties": {
+    "schema_version": { "$ref": "#/$defs/schemaVersion" },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["t", "file", "scene_id", "sharpness", "phash", "exposure"],
+        "properties": {
+          "t": { "type": "number", "minimum": 0, "description": "Frame timestamp, seconds." },
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Path of the frame image, relative to the run directory (frames/*.jpg)."
+          },
+          "scene_id": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Scene index assigned by scene detection; stable within one run."
+          },
+          "sharpness": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Normalized sharpness estimate; higher is sharper."
+          },
+          "phash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$",
+            "description": "64-bit perceptual hash (pHash) as lowercase hex."
+          },
+          "exposure": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Normalized exposure quality; 0 = over/under-exposed, 1 = good."
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "Artifact schema version, semver (patch may be omitted)."
+    }
+  }
+}

@@ -13,7 +13,11 @@ EXIT_FILE_ERROR = 2
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
-    """Validate a Storyboard JSON file. 0 = ok, 1 = invalid, 2 = file error."""
+    """Validate a JSON document. 0 = ok, 1 = invalid, 2 = file error.
+
+    Without --kind the file is validated as a Storyboard (naryad 002);
+    --kind selects a stage artifact schema (naryad 035, docs/artifacts.md).
+    """
     path = Path(args.file)
     try:
         raw = path.read_text(encoding="utf-8")
@@ -26,9 +30,9 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         print(f"razkadr validate: invalid JSON in {path}: {exc}", file=sys.stderr)
         return EXIT_FILE_ERROR
 
-    from razkadr.validation import validate_storyboard
+    from razkadr.validation import validate_document
 
-    issues = validate_storyboard(data)
+    issues = validate_document(data, kind=args.kind)
     if issues:
         for issue in issues:
             print(issue, file=sys.stderr)
@@ -42,8 +46,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=f"razkadr {__version__}")
     sub = parser.add_subparsers(dest="command", metavar="<command>")
 
-    p_validate = sub.add_parser("validate", help="Validate a Storyboard JSON file")
-    p_validate.add_argument("file", help="Path to the Storyboard JSON file")
+    from razkadr.validation import KINDS
+
+    p_validate = sub.add_parser("validate", help="Validate a Storyboard or artifact JSON file")
+    p_validate.add_argument(
+        "--kind",
+        choices=sorted(KINDS),
+        default="storyboard",
+        help="Document kind: storyboard (default) or a stage artifact",
+    )
+    p_validate.add_argument("file", help="Path to the JSON file")
     p_validate.set_defaults(func=_cmd_validate)
 
     args = parser.parse_args(argv)

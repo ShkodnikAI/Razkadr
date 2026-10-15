@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "results": [
+    {
+      "frame": "frames/000129.jpg",
+      "t": 12.9,
+      "text": "МУКА 500 Г",
+      "lang": "ru"
+    },
+    {
+      "frame": "frames/000298.jpg",
+      "t": 29.8,
+      "text": "BAKE 25 MIN",
+      "lang": "en"
+    }
+  ]
+}

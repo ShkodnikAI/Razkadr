@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://razkadr.dev/schemas/ocr.v1.json",
+  "title": "Razkadr OCR artifact",
+  "description": "OCR stage output (naryad 009): screen text found on selected frames. See docs/artifacts.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "results"],
+  "properties": {
+    "schema_version": { "$ref": "#/$defs/schemaVersion" },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["frame", "t", "text", "lang"],
+        "properties": {
+          "frame": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Path of the frame the text was found on, relative to the run directory."
+          },
+          "t": { "type": "number", "minimum": 0, "description": "Timestamp of the frame, seconds." },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Screen text recognized on the frame; lines joined with newline."
+          },
+          "lang": { "$ref": "#/$defs/lang" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "Artifact schema version, semver (patch may be omitted)."
+    },
+    "lang": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$",
+      "description": "BCP-47 language tag (und allowed for undetermined)."
+    }
+  }
+}

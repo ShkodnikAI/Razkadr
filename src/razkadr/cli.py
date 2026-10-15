@@ -1,11 +1,11 @@
 """Command line entry point.
 
 Subcommands: validate (real, naryad 002/035), index (real: ingest +
-frames + transcript + chunks, naryads 005-008; the full pipeline glues
-in naryad 011) and stubs for the remaining pipeline commands (select/
-text/build/eval/eval-check) with a unified interface --config/--force/
---runs-dir/--resume; their logic arrives with later naryads. Exit
-codes: 0 ok, 1 invalid document, 2 file/IO error, 3 command not
+frames + transcript + chunks + ocr, naryads 005-009; the full pipeline
+glues in naryad 011) and stubs for the remaining pipeline commands
+(select/text/build/eval/eval-check) with a unified interface --config/
+--force/--runs-dir/--resume; their logic arrives with later naryads.
+Exit codes: 0 ok, 1 invalid document, 2 file/IO error, 3 command not
 implemented.
 """
 
@@ -61,7 +61,8 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
 
 def _cmd_index(args: argparse.Namespace) -> int:
-    """Pipeline stages: ingest (005), frames (006), transcript (007), chunks (008).
+    """Pipeline stages: ingest (005), frames (006), transcript (007),
+    chunks (008), ocr (009).
 
     The full pipeline (remaining stages, cache, resume) arrives with
     naryad 011; here the command runs the implemented prefix of stages.
@@ -73,6 +74,7 @@ def _cmd_index(args: argparse.Namespace) -> int:
     from razkadr.stages.chunks import ChunksError, run_chunks
     from razkadr.stages.frames import FramesError, run_frames
     from razkadr.stages.ingest import IngestError, run_ingest
+    from razkadr.stages.ocr import OcrError, ocr_params, plan_ocr_candidates, run_ocr
     from razkadr.stages.transcript import TranscriptError, run_transcript
 
     config = load_config(args.config)
@@ -83,7 +85,8 @@ def _cmd_index(args: argparse.Namespace) -> int:
         frames_doc = run_frames(ctx, config)
         transcript_doc = run_transcript(ctx, config)
         chunks_doc = run_chunks(ctx, config)
-    except (IngestError, FramesError, TranscriptError, ChunksError, ProviderError) as exc:
+        ocr_doc = run_ocr(ctx, config)
+    except (IngestError, FramesError, TranscriptError, ChunksError, OcrError, ProviderError) as exc:
         print(f"razkadr index: {exc}", file=sys.stderr)
         return EXIT_FILE_ERROR
     has_audio = (ctx.dir / "audio.wav").is_file()
@@ -91,12 +94,28 @@ def _cmd_index(args: argparse.Namespace) -> int:
     frames = frames_doc["frames"]
     rejected = [f for f in frames if f.get("rejected")]
     accepted = len(frames) - len(rejected)
-    print(f"run {ctx.run_id}: ingest ok, frames ok, transcript ok, chunks ok")
-    print(f"  video:      {source['width']}x{source['height']} @ {source['fps']:g} fps, {source['duration_s']:g} s")
+    # the plan is a pure CPU function (no provider calls), so the summary
+    # works for cached stages too (naryad 009: the share is in the summary);
+    # when no [vlm] provider is configured the stage is skipped: nothing sent
+    vlm_configured = bool((config.get("vlm") or {}).get("provider"))
+    plan = plan_ocr_candidates(frames_doc, ctx.dir, ocr_params(config)) if vlm_configured else []
+    sent = len(plan)
+    share = sent / accepted if accepted else 0.0
+    print(f"run {ctx.run_id}: ingest ok, frames ok, transcript ok, chunks ok, ocr ok")
+    print(
+        f"  video:      {source['width']}x{source['height']} @ {source['fps']:g} fps, {source['duration_s']:g} s"
+    )
     print(f"  audio:      {audio}")
-    print(f"  frames:     {accepted} accepted, {len(rejected)} rejected of {len(frames)} candidates")
+    print(
+        f"  frames:     {accepted} accepted, {len(rejected)} rejected of {len(frames)} candidates"
+    )
+    print(
+        f"  ocr:        {len(ocr_doc['results'])} results ({sent} of {accepted} frames sent, {share:.1%})"
+    )
     if has_audio:
-        print(f"  transcript: lang={transcript_doc['lang']}, {len(transcript_doc['segments'])} segments")
+        print(
+            f"  transcript: lang={transcript_doc['lang']}, {len(transcript_doc['segments'])} segments"
+        )
         print(f"  chunks:     {len(chunks_doc['chunks'])}")
     print(f"  dir:        {ctx.dir}")
     return EXIT_OK
@@ -113,14 +132,20 @@ def _cmd_stub(args: argparse.Namespace) -> int:
 def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", default=None, help="Path to razkadr.toml (default: search)")
     parser.add_argument("--force", action="store_true", help="Re-run stages, ignore stage cache")
-    parser.add_argument("--runs-dir", default=None, help="Directory for runs (default: config runs_dir)")
-    parser.add_argument("--resume", default=None, metavar="RUN_ID", help="Reuse an existing run directory")
+    parser.add_argument(
+        "--runs-dir", default=None, help="Directory for runs (default: config runs_dir)"
+    )
+    parser.add_argument(
+        "--resume", default=None, metavar="RUN_ID", help="Reuse an existing run directory"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="razkadr", description="Video in, deck out.")
     parser.add_argument("--version", action="version", version=f"razkadr {__version__}")
-    parser.add_argument("--verbose", action="store_true", help="Debug logging (JSON lines to stderr)")
+    parser.add_argument(
+        "--verbose", action="store_true", help="Debug logging (JSON lines to stderr)"
+    )
     sub = parser.add_subparsers(dest="command", metavar="<command>")
 
     from razkadr.validation import KINDS
@@ -137,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_index = sub.add_parser(
         "index",
-        help="Ingest a video, extract candidate frames, transcribe speech, chunk the text (naryads No005-No008)",
+        help="Ingest a video, extract frames, transcribe, chunk the text, OCR captions (naryads No005-No009)",
     )
     p_index.add_argument("input", help="Path to a video file, or a URL for yt-dlp")
     _add_common_args(p_index)

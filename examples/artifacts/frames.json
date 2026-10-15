@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "frames": [
     {
       "t": 0.0,
@@ -24,6 +24,16 @@
       "sharpness": 0.35,
       "phash": "c30d7711aa9e6b52",
       "exposure": 0.66
+    },
+    {
+      "t": 13.5,
+      "file": "frames/000135.jpg",
+      "scene_id": 2,
+      "sharpness": 0.36,
+      "phash": "c30d7711aa9e6b52",
+      "exposure": 0.66,
+      "rejected": true,
+      "reject_reason": "duplicate of 12.900s"
     }
   ]
 }

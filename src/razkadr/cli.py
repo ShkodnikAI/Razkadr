@@ -1,11 +1,11 @@
 """Command line entry point.
 
-Subcommands: validate (real, naryad 002/035), index (real, ingest stage
-of naryad 005; the full pipeline glues in naryad 011) and stubs for the
-remaining pipeline commands (select/text/build/eval/eval-check) with a
-unified interface --config/--force/--runs-dir/--resume; their logic
-arrives with later naryads. Exit codes: 0 ok, 1 invalid document,
-2 file/IO error, 3 command not implemented.
+Subcommands: validate (real, naryad 002/035), index (real: ingest +
+frames, naryads 005/006; the full pipeline glues in naryad 011) and
+stubs for the remaining pipeline commands (select/text/build/eval/
+eval-check) with a unified interface --config/--force/--runs-dir/
+--resume; their logic arrives with later naryads. Exit codes: 0 ok,
+1 invalid document, 2 file/IO error, 3 command not implemented.
 """
 
 import argparse
@@ -60,14 +60,15 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
 
 def _cmd_index(args: argparse.Namespace) -> int:
-    """Ingest stage (naryad 005): file or URL -> normalized.mp4, audio.wav, source.json.
+    """Pipeline stages: ingest (naryad 005) then frames (naryad 006).
 
-    The full pipeline (all stages, cache, resume) arrives with naryad 011;
-    here the command runs the first stage only. Ingest failures print a
-    clear message and exit 2.
+    The full pipeline (remaining stages, cache, resume) arrives with
+    naryad 011; here the command runs the implemented prefix of stages.
+    Stage failures print a clear message and exit 2.
     """
     from razkadr.config import load_config
     from razkadr.runctx import RunContext
+    from razkadr.stages.frames import FramesError, run_frames
     from razkadr.stages.ingest import IngestError, run_ingest
 
     config = load_config(args.config)
@@ -75,14 +76,19 @@ def _cmd_index(args: argparse.Namespace) -> int:
     ctx = RunContext(runs_dir, run_id=args.resume, config=config, force=args.force)
     try:
         source = run_ingest(ctx, args.input, config)
-    except IngestError as exc:
+        frames_doc = run_frames(ctx, config)
+    except (IngestError, FramesError) as exc:
         print(f"razkadr index: {exc}", file=sys.stderr)
         return EXIT_FILE_ERROR
     audio = "audio.wav" if (ctx.dir / "audio.wav").is_file() else "none (source has no audio track)"
-    print(f"run {ctx.run_id}: ingest ok")
-    print(f"  video: {source['width']}x{source['height']} @ {source['fps']:g} fps, {source['duration_s']:g} s")
-    print(f"  audio: {audio}")
-    print(f"  dir:   {ctx.dir}")
+    frames = frames_doc["frames"]
+    rejected = [f for f in frames if f.get("rejected")]
+    accepted = len(frames) - len(rejected)
+    print(f"run {ctx.run_id}: ingest ok, frames ok")
+    print(f"  video:   {source['width']}x{source['height']} @ {source['fps']:g} fps, {source['duration_s']:g} s")
+    print(f"  audio:   {audio}")
+    print(f"  frames:  {accepted} accepted, {len(rejected)} rejected of {len(frames)} candidates")
+    print(f"  dir:     {ctx.dir}")
     return EXIT_OK
 
 
@@ -121,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_index = sub.add_parser(
         "index",
-        help="Ingest a local video file or URL into a run directory (naryad No005)",
+        help="Ingest a video file or URL and extract candidate frames (naryads No005, No006)",
     )
     p_index.add_argument("input", help="Path to a video file, or a URL for yt-dlp")
     _add_common_args(p_index)

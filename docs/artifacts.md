@@ -17,7 +17,7 @@ runs/<run_id>/
   audio.wav           # аудиодорожка для ASR (пишет ingest)
   frames/
     *.jpg             # выбранные кадры
-    ../frames.json    # frames: t, file, scene_id, sharpness, phash, exposure (kind=frames)
+    ../frames.json    # frames: t, file, scene_id, sharpness, phash, exposure; rejected+reject_reason для отбракованных (kind=frames)
   transcript.json     # transcript: сегменты (t_start, t_end, text, lang, speaker?) + язык (kind=transcript)
   chunks.json         # chunks: тематические чанки с таймкодами (kind=chunks)
   ocr.json            # ocr: текст на кадрах (frame, t, text, lang) (kind=ocr)

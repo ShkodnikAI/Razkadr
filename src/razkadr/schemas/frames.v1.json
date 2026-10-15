@@ -5,17 +5,33 @@
   "description": "Frames stage output (naryad 006): sampled frames with scene, sharpness, phash and exposure. See docs/artifacts.md.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "frames"],
+  "required": [
+    "schema_version",
+    "frames"
+  ],
   "properties": {
-    "schema_version": { "$ref": "#/$defs/schemaVersion" },
+    "schema_version": {
+      "$ref": "#/$defs/schemaVersion"
+    },
     "frames": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["t", "file", "scene_id", "sharpness", "phash", "exposure"],
+        "required": [
+          "t",
+          "file",
+          "scene_id",
+          "sharpness",
+          "phash",
+          "exposure"
+        ],
         "properties": {
-          "t": { "type": "number", "minimum": 0, "description": "Frame timestamp, seconds." },
+          "t": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Frame timestamp, seconds."
+          },
           "file": {
             "type": "string",
             "minLength": 1,
@@ -42,6 +58,15 @@
             "minimum": 0,
             "maximum": 1,
             "description": "Normalized exposure quality; 0 = over/under-exposed, 1 = good."
+          },
+          "rejected": {
+            "type": "boolean",
+            "description": "True when the frame was rejected (duplicate or quality threshold); its .jpg is kept on disk for audit."
+          },
+          "reject_reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why the frame was rejected, e.g. 'blurry' or 'duplicate of 3.000s'; present only when rejected is true."
           }
         }
       }

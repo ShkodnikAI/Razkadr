@@ -269,7 +269,9 @@ def test_cli_index_runs_frames(env, synthetic_fixtures, capsys):
     out = capsys.readouterr().out
     assert "ingest ok, frames ok" in out
     assert "accepted" in out
-    run_dir = next((_tmp_path / "runs").iterdir())
+    # the env fixture pre-creates an empty run dir; take the run the CLI reports
+    run_id = out.split("run ")[1].split(":")[0]
+    run_dir = _tmp_path / "runs" / run_id
     assert (run_dir / "frames.json").is_file()
     doc = json.loads((run_dir / "frames.json").read_text(encoding="utf-8"))
     assert validate_document(doc, "frames") == []

@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/brand/logo-horizontal.png" alt="Razkadr" width="460"></p>
+
 # Razkadr
 
 **Video in, deck out.** Сервис превращает видео в презентацию с доказательной привязкой к оригиналу: находит качественные кадры по описанию, готовит к каждому короткий текст и собирает слайды (PPTX, PDF, Google Slides) с таймкодами.

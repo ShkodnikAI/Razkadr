@@ -229,3 +229,47 @@ def test_load_schema_kinds_match_files():
     for kind, filename in KINDS.items():
         schema = load_schema(kind)
         assert schema["$id"].endswith(filename)
+
+
+# --- summary (naryad 011): additive optional block of run.v1.1 ----------------
+
+def test_invalid_run_summary_unknown_field():
+    data = load_example("run")
+    data["summary"]["oops"] = 1
+    issues = validate_document(data, "run")
+    assert [i for i in issues if i.path == "summary.oops" and i.reason == "unknown field"]
+
+
+def test_invalid_run_summary_negative_amount():
+    data = load_example("run")
+    data["summary"]["provider_cost"]["amount"] = -0.5
+    issues = validate_document(data, "run")
+    assert [i for i in issues if i.path == "summary.provider_cost.amount"]
+
+
+def test_invalid_run_summary_missing_block():
+    data = load_example("run")
+    del data["summary"]["stage_times_s"]
+    issues = validate_document(data, "run")
+    assert [i for i in issues if i.path == "summary.stage_times_s" and i.reason == "required"]
+
+
+def test_invalid_run_summary_negative_stage_time():
+    data = load_example("run")
+    data["summary"]["stage_times_s"]["ocr"] = -1.0
+    issues = validate_document(data, "run")
+    assert [i for i in issues if i.path == "summary.stage_times_s.ocr"]
+
+
+def test_run_example_11_consistent_numbers():
+    """The example documents a successful run: summary matches the log it aggregates."""
+    data = load_example("run")
+    cost = data["summary"]["provider_cost"]
+    assert cost["calls"] == len(data["provider_calls"])
+    assert cost["amount"] == round(
+        sum(c["cost"]["amount"] for c in data["provider_calls"]), 6
+    )
+    assert cost["cache_hits"] == sum(1 for c in data["provider_calls"] if c["cache_hit"])
+    times = data["summary"]["stage_times_s"]
+    for stage in data["stages"]:
+        assert times[stage["name"]] == stage["duration_s"]

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "run_id": "2026-10-15T07-30-00_a1b2c3",
   "created_utc": "2026-10-15T07:30:00Z",
   "razkadr_version": "0.0.1",
@@ -9,7 +9,9 @@
     { "name": "ingest", "status": "ok", "started_utc": "2026-10-15T07:30:01Z", "duration_s": 3.2 },
     { "name": "frames", "status": "ok", "started_utc": "2026-10-15T07:30:04Z", "duration_s": 41.7 },
     { "name": "transcript", "status": "cached", "started_utc": "2026-10-15T07:30:46Z", "duration_s": 0.1 },
-    { "name": "index", "status": "failed", "started_utc": "2026-10-15T07:30:46Z", "duration_s": 1.0, "error": "provider rate limit exceeded" }
+    { "name": "chunks", "status": "ok", "started_utc": "2026-10-15T07:30:46Z", "duration_s": 1.4 },
+    { "name": "ocr", "status": "ok", "started_utc": "2026-10-15T07:30:48Z", "duration_s": 6.8 },
+    { "name": "index", "status": "ok", "started_utc": "2026-10-15T07:30:55Z", "duration_s": 2.1 }
   ],
   "provider_calls": [
     {
@@ -26,9 +28,37 @@
       "provider": "openai",
       "model": "text-embedding-3-small",
       "task": "embed",
-      "units": [ { "kind": "images", "value": 96 }, { "kind": "tokens", "value": 15360 } ],
+      "units": [ { "kind": "images", "value": 88 }, { "kind": "tokens", "value": 15360 } ],
       "cost": { "amount": 0.0031, "currency": "USD", "tariff_date": "2026-10-01" },
       "cache_hit": false
     }
-  ]
+  ],
+  "summary": {
+    "stage_times_s": {
+      "ingest": 3.2,
+      "frames": 41.7,
+      "transcript": 0.1,
+      "chunks": 1.4,
+      "ocr": 6.8,
+      "index": 2.1
+    },
+    "provider_cost": {
+      "amount": 0.4231,
+      "currency": "USD",
+      "calls": 2,
+      "cache_hits": 1,
+      "by_stage": { "transcript": 0.42, "index": 0.0031 }
+    },
+    "artifacts": {
+      "frames_candidates": 96,
+      "frames_accepted": 88,
+      "frames_rejected": 8,
+      "ocr_results": 6,
+      "ocr_frames_sent": 12,
+      "transcript_segments": 31,
+      "transcript_s": 840.5,
+      "chunks": 9,
+      "index_vectors": 103
+    }
+  }
 }

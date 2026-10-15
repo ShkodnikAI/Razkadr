@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "id": "shakshuka-2026-10-01",
+    "title": "Шакшука на сковороде",
+    "preset": "recipe",
+    "output_lang": "ru"
+  },
+  "sources": [
+    {
+      "id": "v1",
+      "path": "runs/shakshuka/source.mp4",
+      "url": "https://www.youtube.com/watch?v=demo",
+      "duration_s": 840.5,
+      "detected_lang": "ru"
+    }
+  ],
+  "episodes": [
+    {
+      "id": "e1",
+      "role": "hero",
+      "source_id": "v1",
+      "t_start": 780.0,
+      "t_end": 800.0,
+      "frame": {
+        "path": "frames/v1_0047100.jpg",
+        "t": 787.0,
+        "score": 0.91,
+        "score_parts": { "sharpness": 0.88, "aesthetic": 0.95, "relevance": 0.9 }
+      },
+      "alternatives": [
+        { "path": "frames/v1_0047350.jpg", "t": 789.5, "score": 0.85 }
+      ],
+      "text": {
+        "mode": "described",
+        "source_lang": "ru",
+        "original": "",
+        "output": "Готовая шакшука в чугунной сковороде: яйца в томатном соусе, зелень.",
+        "output_lang": "ru"
+      },
+      "user_edited": false
+    },
+    {
+      "id": "e2",
+      "role": "ingredients",
+      "source_id": "v1",
+      "t_start": 12.4,
+      "t_end": 31.0,
+      "frame": {
+        "path": "frames/v1_0000800.jpg",
+        "t": 16.0,
+        "score": 0.87,
+        "score_parts": { "sharpness": 0.9, "aesthetic": 0.8, "relevance": 0.91 }
+      },
+      "alternatives": [
+        { "path": "frames/v1_0000920.jpg", "t": 18.4, "score": 0.81 }
+      ],
+      "text": {
+        "mode": "condensed",
+        "source_lang": "ru",
+        "original": "Для шакшуки нам понадобятся: четыре яйца, помидоры, болгарский перец, лук, чеснок, паприка, зира, соль и немного оливкового масла.",
+        "output": "Яйца — 4 шт., помидоры — 500 г, перец болгарский — 1 шт., лук — 1 шт., чеснок — 2 зубчика, паприка — 1 ч. л., зира — 0,5 ч. л., соль, оливковое масло — 2 ст. л.",
+        "output_lang": "ru"
+      },
+      "user_edited": false
+    },
+    {
+      "id": "e3",
+      "role": "step",
+      "source_id": "v1",
+      "t_start": 45.0,
+      "t_end": 62.5,
+      "frame": {
+        "path": "frames/v1_0002100.jpg",
+        "t": 52.5,
+        "score": 0.83,
+        "score_parts": { "sharpness": 0.85, "aesthetic": 0.74, "relevance": 0.9 }
+      },
+      "alternatives": [],
+      "text": {
+        "mode": "condensed",
+        "source_lang": "ru",
+        "original": "Разогреваем масло и обжариваем лук с перцем до мягкости, минуты три-четыре.",
+        "output": "Разогрейте масло и обжарьте лук с перцем до мягкости, 3–4 минуты.",
+        "output_lang": "ru"
+      },
+      "user_edited": false
+    }
+  ]
+}

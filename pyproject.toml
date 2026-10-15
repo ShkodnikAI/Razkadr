@@ -9,16 +9,19 @@ description = "Video in, deck out: video -> storyboard -> presentation"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
-dependencies = []
+dependencies = ["jsonschema>=4"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6", "jsonschema>=4"]
+dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
 razkadr = "razkadr.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+razkadr = ["schemas/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

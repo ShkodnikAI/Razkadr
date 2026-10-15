@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://razkadr.dev/schemas/storyboard.v1.json",
+  "title": "Razkadr Storyboard",
+  "description": "Central object of Razkadr: video sources, episodes with frames and texts. See docs/storyboard.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project", "sources", "episodes"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "Storyboard schema version, semver (patch may be omitted: 1.0 == 1.0.0). Schema file storyboard.v1.json validates major version 1 only."
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "preset", "output_lang"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable project identifier."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable document title, shown on the title slide."
+        },
+        "preset": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Scenario preset that defines episode roles and scoring profile (MVP: recipe)."
+        },
+        "output_lang": {
+          "$ref": "#/$defs/lang"
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Source identifier referenced by episodes.source_id."
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Local path of the normalized video file."
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Original URL the video was ingested from, if any."
+          },
+          "duration_s": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Duration in seconds; episode times are checked against it when present."
+          },
+          "detected_lang": {
+            "$ref": "#/$defs/lang"
+          }
+        }
+      }
+    },
+    "episodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "role", "source_id", "t_start", "t_end", "frame"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Episode identifier, unique within the storyboard."
+          },
+          "role": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Role in the document structure, defined by the preset (e.g. hero, ingredients, step)."
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Reference to an entry in sources."
+          },
+          "t_start": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Episode start time in seconds from the beginning of the source."
+          },
+          "t_end": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Episode end time in seconds; must be >= t_start."
+          },
+          "frame": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "t"],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Path of the representative frame image."
+              },
+              "t": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Frame timestamp in seconds."
+              },
+              "score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Combined frame score from the selection stage."
+              },
+              "score_parts": {
+                "type": "object",
+                "description": "Named score components; keys are preset-defined, values are normalized to [0, 1].",
+                "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          },
+          "alternatives": {
+            "type": "array",
+            "description": "Runner-up frames for this episode, best first.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "t"],
+              "properties": {
+                "path": { "type": "string", "minLength": 1 },
+                "t": { "type": "number", "minimum": 0 },
+                "score": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          },
+          "text": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mode"],
+            "description": "Episode text. Absent in a draft storyboard produced by the selection stage.",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": ["verbatim", "condensed", "described"],
+                "description": "verbatim: transcript as spoken; condensed: shortened; described: VLM description of the frame (silent video)."
+              },
+              "source_lang": { "$ref": "#/$defs/lang" },
+              "original": {
+                "type": "string",
+                "description": "Text derived from the source transcript."
+              },
+              "output": {
+                "type": "string",
+                "description": "Text rendered on the slide (possibly translated)."
+              },
+              "output_lang": { "$ref": "#/$defs/lang" }
+            }
+          },
+          "user_edited": {
+            "type": "boolean",
+            "default": false,
+            "description": "True once the user changed the episode (frame, text, order); regeneration must preserve it."
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "lang": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$",
+      "description": "BCP-47 language tag. MVP uses primary subtags ru and en; full IANA registry validation is out of scope."
+    }
+  }
+}

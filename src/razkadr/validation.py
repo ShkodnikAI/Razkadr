@@ -1,25 +1,53 @@
-"""Storyboard validation: JSON Schema checks + semantic rules.
+"""Validation of Storyboard and stage artifacts: JSON Schema + semantic rules.
 
 Error format (one issue per line): ``<json-path>: <reason>``,
 for example ``episodes[0].frame.path: required``. JSON paths follow the
 jsonschema ``json_path`` syntax without the leading ``$``.
+
+Artifact kinds and their schemas (docs/artifacts.md):
+
+======================  =========================
+kind                    schema
+======================  =========================
+storyboard (default)    storyboard.v1.json
+source                  source.v1.json
+frames                  frames.v1.json
+transcript              transcript.v1.json
+chunks                  chunks.v1.json
+ocr                     ocr.v1.json
+index                   index.v1.json
+run                     run.v1.json
+======================  =========================
 """
 
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
 
-SCHEMA_FILENAME = "storyboard.v1.json"
+SCHEMA_DIRNAME = "schemas"
 SUPPORTED_MAJOR = 1
 
-# Episodes whose t_end exceeds duration_s by less than this are accepted
+# Episodes/chunks whose t_end exceeds the bound by less than this are accepted
 # (float timestamps from ffmpeg/ASR routinely overshoot by sub-millisecond).
 DURATION_EPSILON_S = 0.001
+
+# kind -> schema file name; storyboard is the default validate target (naryad 002).
+KINDS: dict[str, str] = {
+    "storyboard": "storyboard.v1.json",
+    "source": "source.v1.json",
+    "frames": "frames.v1.json",
+    "transcript": "transcript.v1.json",
+    "chunks": "chunks.v1.json",
+    "ocr": "ocr.v1.json",
+    "index": "index.v1.json",
+    "run": "run.v1.json",
+}
 
 
 @dataclass(frozen=True)
@@ -33,26 +61,29 @@ class Issue:
         return f"{self.path}: {self.reason}"
 
 
-def load_schema() -> dict:
-    """Load the Storyboard v1 schema.
-
-    Resolution order: RAZKADR_SCHEMA_DIR env var, a ``schemas/`` directory found
-    walking up from the CWD (git checkout), the copy packaged with the library.
-    A test keeps the packaged copy identical to the canonical root file.
-    """
-    import os
-
+def _schema_candidates() -> list[Path]:
     candidates: list[Path] = []
     env_dir = os.environ.get("RAZKADR_SCHEMA_DIR")
     if env_dir:
-        candidates.append(Path(env_dir) / SCHEMA_FILENAME)
+        candidates.append(Path(env_dir))
     cwd = Path.cwd()
-    for base in (cwd, *cwd.parents):
-        candidates.append(base / "schemas" / SCHEMA_FILENAME)
-    for candidate in candidates:
+    candidates += [base / SCHEMA_DIRNAME for base in (cwd, *cwd.parents)]
+    return candidates
+
+
+def load_schema(kind: str = "storyboard") -> dict:
+    """Load the schema for kind.
+
+    Resolution order: RAZKADR_SCHEMA_DIR env var, a ``schemas/`` directory found
+    walking up from the CWD (git checkout), the copy packaged with the library.
+    A test keeps packaged copies identical to the canonical root files.
+    """
+    filename = KINDS[kind]
+    for base in _schema_candidates():
+        candidate = base / filename
         if candidate.is_file():
             return json.loads(candidate.read_text(encoding="utf-8"))
-    packaged = resources.files("razkadr.schemas").joinpath(SCHEMA_FILENAME)
+    packaged = resources.files("razkadr.schemas").joinpath(filename)
     return json.loads(packaged.read_text(encoding="utf-8"))
 
 
@@ -76,9 +107,9 @@ def _format_schema_error(err) -> Issue:
     return Issue(path, err.message)
 
 
-def _check_semantics(data, issues: list[Issue]) -> None:
-    """Semantic rules beyond the schema; safe on structurally broken input."""
-    version = data.get("schema_version")
+def _check_version(data, issues: list[Issue]) -> None:
+    """Every v1 schema accepts only major version 1."""
+    version = data.get("schema_version") if isinstance(data, dict) else None
     if isinstance(version, str):
         major = version.split(".", 1)[0]
         if not major.isdigit() or int(major) != SUPPORTED_MAJOR:
@@ -89,6 +120,9 @@ def _check_semantics(data, issues: list[Issue]) -> None:
                 )
             )
 
+
+def _check_storyboard(data, issues: list[Issue]) -> None:
+    """Storyboard semantic rules (naryad 002); safe on structurally broken input."""
     sources = data.get("sources")
     source_ids: set[str] = set()
     if isinstance(sources, list):
@@ -141,10 +175,50 @@ def _check_semantics(data, issues: list[Issue]) -> None:
             issues.append(Issue(_child_path(path, "t_end"), f"exceeds source duration_s ({duration})"))
 
 
-def validate_storyboard(data: object) -> list[Issue]:
-    """Validate parsed Storyboard data; return issues (empty list if valid)."""
-    schema = load_schema()
-    validator = Draft202012Validator(schema)
+def _check_timed_items(data, issues: list[Issue], container: str) -> None:
+    """Shared rule for transcript segments and chunks: t_end >= t_start, unique ids."""
+    items = data.get(container)
+    if not isinstance(items, list):
+        return
+    ids: set[str] = set()
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        path = _child_path(container, i)
+        item_id = item.get("id")
+        if isinstance(item_id, str):
+            if item_id in ids:
+                issues.append(Issue(path, f"duplicate id {item_id!r}"))
+            ids.add(item_id)
+        t_start, t_end = item.get("t_start"), item.get("t_end")
+        if (
+            isinstance(t_start, (int, float))
+            and isinstance(t_end, (int, float))
+            and t_end < t_start
+        ):
+            issues.append(Issue(_child_path(path, "t_end"), f"t_end ({t_end}) < t_start ({t_start})"))
+
+
+_SEMANTIC_CHECKS = {
+    "storyboard": _check_storyboard,
+    "transcript": lambda data, issues: _check_timed_items(data, issues, "segments"),
+    "chunks": lambda data, issues: _check_timed_items(data, issues, "chunks"),
+}
+
+
+def validate_document(data: object, kind: str = "storyboard") -> list[Issue]:
+    """Validate parsed document of kind; return issues (empty list if valid)."""
+    if kind not in KINDS:
+        raise KeyError(f"unknown kind {kind!r}, expected one of {sorted(KINDS)}")
+    validator = Draft202012Validator(load_schema(kind), format_checker=FormatChecker())
     issues = [_format_schema_error(err) for err in validator.iter_errors(data)]
-    _check_semantics(data, issues)
+    _check_version(data, issues)
+    check = _SEMANTIC_CHECKS.get(kind)
+    if check:
+        check(data, issues)
     return issues
+
+
+def validate_storyboard(data: object) -> list[Issue]:
+    """Back-compat wrapper: validate a Storyboard document."""
+    return validate_document(data, "storyboard")

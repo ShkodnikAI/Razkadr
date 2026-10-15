@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://razkadr.dev/schemas/chunks.v1.json",
+  "title": "Razkadr chunks artifact",
+  "description": "Chunking stage output (naryad 008): thematic text chunks with timecodes. See docs/artifacts.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "chunks"],
+  "properties": {
+    "schema_version": { "$ref": "#/$defs/schemaVersion" },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "t_start", "t_end", "text"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Chunk identifier, unique within the artifact."
+          },
+          "t_start": { "type": "number", "minimum": 0, "description": "Chunk start, seconds." },
+          "t_end": { "type": "number", "minimum": 0, "description": "Chunk end, seconds; >= t_start." },
+          "text": { "type": "string", "minLength": 1, "description": "Chunk text assembled from transcript segments." }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "Artifact schema version, semver (patch may be omitted)."
+    }
+  }
+}

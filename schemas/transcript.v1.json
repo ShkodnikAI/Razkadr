@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://razkadr.dev/schemas/transcript.v1.json",
+  "title": "Razkadr transcript artifact",
+  "description": "ASR stage output (naryad 007): timed speech segments and detected language. See docs/artifacts.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "lang", "segments"],
+  "properties": {
+    "schema_version": { "$ref": "#/$defs/schemaVersion" },
+    "lang": {
+      "$ref": "#/$defs/lang",
+      "description": "Detected language of the whole audio."
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["t_start", "t_end", "text", "lang"],
+        "properties": {
+          "t_start": { "type": "number", "minimum": 0, "description": "Segment start, seconds." },
+          "t_end": { "type": "number", "minimum": 0, "description": "Segment end, seconds; >= t_start." },
+          "text": { "type": "string", "minLength": 1, "description": "Transcript of the segment, verbatim." },
+          "lang": { "$ref": "#/$defs/lang" },
+          "speaker": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Speaker label, when diarization is available; reserved for wave 8+."
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "Artifact schema version, semver (patch may be omitted)."
+    },
+    "lang": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$",
+      "description": "BCP-47 language tag (und allowed for undetermined)."
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://razkadr.dev/schemas/index.v1.json",
+  "title": "Razkadr vector index manifest",
+  "description": "Embedding stage output (naryad 010): manifest of a vector store. See docs/artifacts.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "provider", "model", "version", "dim", "num_vectors", "vectors_file"],
+  "properties": {
+    "schema_version": { "$ref": "#/$defs/schemaVersion" },
+    "provider": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Embedding provider id from the provider layer (naryad 033)."
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Embedding model name as requested from the provider."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Provider-reported model version, pinned for reproducibility."
+    },
+    "dim": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "description": "Vector dimensionality; every vector in the store has this length."
+    },
+    "num_vectors": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of vectors in the store."
+    },
+    "vectors_file": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Path of the vector payload file, relative to the run directory (index/*)."
+    },
+    "space": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Logical vector space name (frames, chunks, ocr); hybrid search (naryad 012) reads several manifests."
+    }
+  },
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "Artifact schema version, semver (patch may be omitted)."
+    }
+  }
+}

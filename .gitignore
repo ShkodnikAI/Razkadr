@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# рабочие данные: видео, кадры, индексы, результаты
+data/
+runs/
+*.mp4
+*.mov
+*.mkv
+.env

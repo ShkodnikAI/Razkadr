@@ -23,11 +23,44 @@ runs/<run_id>/
   ocr.json            # ocr: текст на кадрах (frame, t, text, lang) (kind=ocr)
   index/
     manifest.json     # index: провайдер, модель, версия, dim, число векторов (kind=index)
-    vectors.bin       #payload векторов; путь фиксируется в manifest.vectors_file
+    vectors.bin       # payload векторов; путь фиксируется в manifest.vectors_file
+    meta.db           # SQLite: id/space/метаданные векторов + meta (dim, provider, model, version)
   storyboard.json     # storyboard (наряд №002), создаётся отбором (волна 2)
 ```
 
 `run_id` — имя каталога и поле `run_id` в `run.json` (одинаковые). Пути внутри артефактов (`frames[].file`, `vectors_file`) задаются относительно каталога запуска: каталог можно перемещать целиком.
+
+## Индекс (№010): хранилище векторов
+
+Стадия читает `frames.json` (только не-отбракованные кадры), `chunks.json`
+и `ocr.json`, считает эмбеддинги через слой провайдеров (`[embeddings]`,
+батчами по `batch_size`, каждый батч кэшируется) и пишет:
+
+- `index/vectors.bin` — матрица float32 N×dim (строки в порядке `vectors.row`);
+- `index/meta.db` — SQLite: таблица `vectors` (id, space, row, source, file,
+  t, t_end, scene_id, sharpness, lang, text) и таблица `meta` (dim, provider,
+  model, version);
+- `index/manifest.json` — по схеме `index.v1.json`: провайдер, модель, версия,
+  dim, num_vectors, `vectors_file` (путь относительно каталога запуска).
+  Поле `space` не заполняется: хранилище смешивает три пространства —
+  `frames` (кадры), `chunks` (тексты чанков), `ocr` (распознанные тексты);
+  пространство каждой записи — в столбце `space`.
+
+Поиск — точный по косинусной близости (numpy, ADR-0007, proposed):
+`LocalVectorStore(dir).open().search(query, k, filters)` → `[(id, score,
+metadata)]`, порядок — по убыванию score, при равенстве по id. Фильтры
+(`Filters`, все опциональные, комбинируются через AND): `spaces` —
+подмножество {frames, chunks, ocr}; `source` — точное совпадение (url или
+путь из `source.json`); `t_start`/`t_end` — пересечение временного интервала
+(кадры/OCR — мгновение t, чанки — отрезок t_start..t_end);
+`min_sharpness` — только кадры (текстовые записи без резкости отсекаются).
+
+Смена провайдера, модели или `model_version` меняет ключ кэша стадии —
+индекс пересобирается с нуля (`index/` стирается), смена помечается в логе
+(`index is stale`). При полностью пустом входе (нет принятых кадров, чанков
+и OCR) размерность берётся одним пробным вызовом `embed_texts` (вектор не
+сохраняется). Без раздела `[embeddings]` стадия пропускается с предупреждением
+и артефакты `index/` не создаются.
 
 ## Что пишет и читает каждая стадия
 
@@ -38,7 +71,7 @@ runs/<run_id>/
 | Транскрипт (№007) | `audio.wav` | `transcript.json` |
 | Чанки (№008) | `transcript.json` | `chunks.json` |
 | OCR (№009) | `frames.json`, `frames/*.jpg` | `ocr.json` |
-| Индекс (№010) | `frames.json`, `chunks.json`, `ocr.json` | `index/manifest.json`, `index/vectors.bin` |
+| Индекс (№010) | `frames.json`, `chunks.json`, `ocr.json`, `source.json` | `index/manifest.json`, `index/vectors.bin`, `index/meta.db` |
 | Отбор (№014, волна 2) | `index/`, `frames.json`, `chunks.json`, `ocr.json` | `storyboard.json` (черновик без текста) |
 | Текст (№017–019, волна 3) | `storyboard.json`, `transcript.json` | `storyboard.json` (с текстом) |
 | Сборка (№021–028, волна 4) | `storyboard.json`, кадры | PPTX/PDF/HTML/JSON |

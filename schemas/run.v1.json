@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://razkadr.dev/schemas/run.v1.json",
   "title": "Razkadr run manifest",
-  "description": "RunContext output (naryad 036): run metadata, stage log and provider call accounting. See docs/artifacts.md.",
+  "description": "RunContext output (naryad 036): run metadata, stage log, provider call accounting and the final summary (naryad 011). See docs/artifacts.md.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -186,6 +186,75 @@
           "cache_hit": {
             "type": "boolean",
             "description": "True when the result came from the call cache and no billable request was made."
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Final run summary (naryad 011), written once by the command when every stage has finished: per-stage wall time, aggregated provider cost and key artifact counts. Absent while stages are running or after a failed run.",
+      "required": [
+        "stage_times_s",
+        "provider_cost",
+        "artifacts"
+      ],
+      "properties": {
+        "stage_times_s": {
+          "type": "object",
+          "description": "Wall time per stage, seconds; the last completed attempt of each stage in this run (failed attempts without a duration are not counted).",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "provider_cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "provider_calls aggregated: total cost, per-stage cost, call and cache-hit counts.",
+          "required": [
+            "amount",
+            "calls",
+            "cache_hits",
+            "by_stage"
+          ],
+          "properties": {
+            "amount": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Total cost across all provider calls of the run."
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$",
+              "description": "ISO 4217 code of every call; absent when there were no calls."
+            },
+            "calls": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of provider calls."
+            },
+            "cache_hits": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Calls served from the call cache."
+            },
+            "by_stage": {
+              "type": "object",
+              "description": "Cost per stage name.",
+              "additionalProperties": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "artifacts": {
+          "type": "object",
+          "description": "Key numbers from the run artifacts: frames_candidates, frames_accepted, frames_rejected, ocr_results, ocr_frames_sent, transcript_segments, transcript_s (speech seconds covered by segments), chunks, index_vectors.",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
           }
         }
       }

@@ -18,6 +18,8 @@ dependencies = [
     # pulled by scenedetect can also be present - both provide the same cv2
     "opencv-python-headless>=4.8",
     "imagehash>=4.3",
+    # index stage (naryad 010): exact cosine search in the core vector store
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]
@@ -34,8 +36,10 @@ razkadr = ["schemas/*.json", "prompts/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not bench'"
 markers = [
     "ffmpeg: media tests that need the ffmpeg/ffprobe binaries; skipped when absent",
+    "bench: micro-benchmarks run explicitly with 'pytest -m bench' (slow, numbers go into PRs)",
 ]
 
 [tool.ruff]

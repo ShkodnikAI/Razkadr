@@ -1,10 +1,11 @@
 """Command line entry point.
 
-Subcommands: validate (real, naryad 002/035) and stubs for the pipeline
-commands (index/select/text/build/eval/eval-check) with a unified
-interface --config/--force/--runs-dir/--resume; their logic arrives with
-later naryads. Exit codes: 0 ok, 1 invalid document, 2 file/IO error,
-3 command not implemented.
+Subcommands: validate (real, naryad 002/035), index (real, ingest stage
+of naryad 005; the full pipeline glues in naryad 011) and stubs for the
+remaining pipeline commands (select/text/build/eval/eval-check) with a
+unified interface --config/--force/--runs-dir/--resume; their logic
+arrives with later naryads. Exit codes: 0 ok, 1 invalid document,
+2 file/IO error, 3 command not implemented.
 """
 
 import argparse
@@ -21,7 +22,6 @@ EXIT_NOT_IMPLEMENTED = 3
 
 # stub command -> owning naryad (shown in help and stub message)
 STUB_COMMANDS = {
-    "index": "011",
     "select": "014",
     "text": "017",
     "build": "028",
@@ -59,6 +59,33 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_index(args: argparse.Namespace) -> int:
+    """Ingest stage (naryad 005): file or URL -> normalized.mp4, audio.wav, source.json.
+
+    The full pipeline (all stages, cache, resume) arrives with naryad 011;
+    here the command runs the first stage only. Ingest failures print a
+    clear message and exit 2.
+    """
+    from razkadr.config import load_config
+    from razkadr.runctx import RunContext
+    from razkadr.stages.ingest import IngestError, run_ingest
+
+    config = load_config(args.config)
+    runs_dir = args.runs_dir or config.get("runs_dir", "runs")
+    ctx = RunContext(runs_dir, run_id=args.resume, config=config, force=args.force)
+    try:
+        source = run_ingest(ctx, args.input, config)
+    except IngestError as exc:
+        print(f"razkadr index: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    audio = "audio.wav" if (ctx.dir / "audio.wav").is_file() else "none (source has no audio track)"
+    print(f"run {ctx.run_id}: ingest ok")
+    print(f"  video: {source['width']}x{source['height']} @ {source['fps']:g} fps, {source['duration_s']:g} s")
+    print(f"  audio: {audio}")
+    print(f"  dir:   {ctx.dir}")
+    return EXIT_OK
+
+
 def _cmd_stub(args: argparse.Namespace) -> int:
     print(
         f"razkadr {args.cmd}: not implemented yet (planned: naryad No{args.naryad})",
@@ -91,6 +118,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_validate.add_argument("file", help="Path to the JSON file")
     p_validate.set_defaults(func=_cmd_validate)
+
+    p_index = sub.add_parser(
+        "index",
+        help="Ingest a local video file or URL into a run directory (naryad No005)",
+    )
+    p_index.add_argument("input", help="Path to a video file, or a URL for yt-dlp")
+    _add_common_args(p_index)
+    p_index.set_defaults(func=_cmd_index)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

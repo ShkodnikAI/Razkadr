@@ -1,5 +1,5 @@
-from raskadr import __version__
-from raskadr.cli import main
+from razkadr import __version__
+from razkadr.cli import main
 
 
 def test_version():

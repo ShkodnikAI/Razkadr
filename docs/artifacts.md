@@ -19,7 +19,7 @@ runs/<run_id>/
     *.jpg             # выбранные кадры
     ../frames.json    # frames: t, file, scene_id, sharpness, phash, exposure; rejected+reject_reason для отбракованных (kind=frames)
   transcript.json     # transcript: сегменты (t_start, t_end, text, lang, speaker?) + язык (kind=transcript)
-  chunks.json         # chunks: тематические чанки с таймкодами (kind=chunks)
+  chunks.json         # chunks: тематические чанки (id, t_start, t_end, text, lang, segment_ids — привязка к сегментам транскрипта) (kind=chunks)
   ocr.json            # ocr: текст на кадрах (frame, t, text, lang) (kind=ocr)
   index/
     manifest.json     # index: провайдер, модель, версия, dim, число векторов (kind=index)

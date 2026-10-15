@@ -30,7 +30,7 @@ razkadr = "razkadr.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-razkadr = ["schemas/*.json"]
+razkadr = ["schemas/*.json", "prompts/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

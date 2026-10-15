@@ -1,6 +1,4 @@
-<p align="center"><img src="docs/brand/logo.png" alt="Raskadr" width="420"></p>
-
-# Raskadr
+# Razkadr
 
 **Video in, deck out.** Сервис превращает видео в презентацию с доказательной привязкой к оригиналу: находит качественные кадры по описанию, готовит к каждому короткий текст и собирает слайды (PPTX, PDF, Google Slides) с таймкодами.
 
@@ -43,7 +41,7 @@ pytest
 Репозиторий создан локально с историей коммитов. Чтобы опубликовать:
 
 ```bash
-gh repo create raskadr --private --source=. --remote=origin --push
+gh repo create razkadr --private --source=. --remote=origin --push
 ```
 
 После этого завести issues для нарядов волны 0 из `docs/naryady/` (шаблон `.github/ISSUE_TEMPLATE/naryad.md`).

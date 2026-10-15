@@ -10,7 +10,7 @@
 ## Контракт
 ```
 schemas/storyboard.v1.json + examples/storyboard.valid.json
-→ `raskadr validate examples/storyboard.valid.json` печатает "ok", код 0
+→ `razkadr validate examples/storyboard.valid.json` печатает "ok", код 0
 
 examples/storyboard.invalid.json (например, нет episodes[0].frame.path)
 → код 1, сообщение с путём ошибки: episodes[0].frame.path: required
@@ -18,7 +18,7 @@ examples/storyboard.invalid.json (например, нет episodes[0].frame.pat
 
 ## Scope
 - `schemas/storyboard.v1.json` по структуре из `docs/spec.md` §3.1: `schema_version`, `project`, `sources`, `episodes` (role, source_id, t_start, t_end, frame, alternatives, text, user_edited).
-- Команда `raskadr validate`.
+- Команда `razkadr validate`.
 - Примеры: валидный, валидный с правками пользователя (`user_edited: true`), невалидный.
 - Правила схемы: `t_end >= t_start` (проверка в валидаторе), режимы текста `verbatim|condensed|described`, языки кодами BCP-47.
 - Тесты `tests/test_schema.py`.

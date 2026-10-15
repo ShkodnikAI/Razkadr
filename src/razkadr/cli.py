@@ -1,9 +1,9 @@
 """Command line entry point.
 
 Subcommands: validate (real, naryad 002/035), index (real: ingest +
-frames + transcript, naryads 005/006/007; the full pipeline glues in
-naryad 011) and stubs for the remaining pipeline commands (select/text/
-build/eval/eval-check) with a unified interface --config/--force/
+frames + transcript + chunks, naryads 005-008; the full pipeline glues
+in naryad 011) and stubs for the remaining pipeline commands (select/
+text/build/eval/eval-check) with a unified interface --config/--force/
 --runs-dir/--resume; their logic arrives with later naryads. Exit
 codes: 0 ok, 1 invalid document, 2 file/IO error, 3 command not
 implemented.
@@ -61,7 +61,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
 
 def _cmd_index(args: argparse.Namespace) -> int:
-    """Pipeline stages: ingest (naryad 005), frames (naryad 006), transcript (naryad 007).
+    """Pipeline stages: ingest (005), frames (006), transcript (007), chunks (008).
 
     The full pipeline (remaining stages, cache, resume) arrives with
     naryad 011; here the command runs the implemented prefix of stages.
@@ -70,6 +70,7 @@ def _cmd_index(args: argparse.Namespace) -> int:
     from razkadr.config import load_config
     from razkadr.providers.base import ProviderError
     from razkadr.runctx import RunContext
+    from razkadr.stages.chunks import ChunksError, run_chunks
     from razkadr.stages.frames import FramesError, run_frames
     from razkadr.stages.ingest import IngestError, run_ingest
     from razkadr.stages.transcript import TranscriptError, run_transcript
@@ -81,7 +82,8 @@ def _cmd_index(args: argparse.Namespace) -> int:
         source = run_ingest(ctx, args.input, config)
         frames_doc = run_frames(ctx, config)
         transcript_doc = run_transcript(ctx, config)
-    except (IngestError, FramesError, TranscriptError, ProviderError) as exc:
+        chunks_doc = run_chunks(ctx, config)
+    except (IngestError, FramesError, TranscriptError, ChunksError, ProviderError) as exc:
         print(f"razkadr index: {exc}", file=sys.stderr)
         return EXIT_FILE_ERROR
     has_audio = (ctx.dir / "audio.wav").is_file()
@@ -89,12 +91,13 @@ def _cmd_index(args: argparse.Namespace) -> int:
     frames = frames_doc["frames"]
     rejected = [f for f in frames if f.get("rejected")]
     accepted = len(frames) - len(rejected)
-    print(f"run {ctx.run_id}: ingest ok, frames ok, transcript ok")
+    print(f"run {ctx.run_id}: ingest ok, frames ok, transcript ok, chunks ok")
     print(f"  video:      {source['width']}x{source['height']} @ {source['fps']:g} fps, {source['duration_s']:g} s")
     print(f"  audio:      {audio}")
     print(f"  frames:     {accepted} accepted, {len(rejected)} rejected of {len(frames)} candidates")
     if has_audio:
         print(f"  transcript: lang={transcript_doc['lang']}, {len(transcript_doc['segments'])} segments")
+        print(f"  chunks:     {len(chunks_doc['chunks'])}")
     print(f"  dir:        {ctx.dir}")
     return EXIT_OK
 
@@ -134,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_index = sub.add_parser(
         "index",
-        help="Ingest a video, extract candidate frames and transcribe speech (naryads No005-No007)",
+        help="Ingest a video, extract candidate frames, transcribe speech, chunk the text (naryads No005-No008)",
     )
     p_index.add_argument("input", help="Path to a video file, or a URL for yt-dlp")
     _add_common_args(p_index)

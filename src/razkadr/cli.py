@@ -1,10 +1,11 @@
 """Command line entry point.
 
 Subcommands: validate (real, naryad 002/035), index (real: ingest +
-frames + transcript + chunks + ocr, naryads 005-009; the full pipeline
-glues in naryad 011) and stubs for the remaining pipeline commands
-(select/text/build/eval/eval-check) with a unified interface --config/
---force/--runs-dir/--resume; their logic arrives with later naryads.
+frames + transcript + chunks + ocr + embeddings index, naryads 005-010;
+the full pipeline glues in naryad 011) and stubs for the remaining
+pipeline commands (select/text/build/eval/eval-check) with a unified
+interface --config/--force/--runs-dir/--resume; their logic arrives with
+later naryads.
 Exit codes: 0 ok, 1 invalid document, 2 file/IO error, 3 command not
 implemented.
 """
@@ -62,17 +63,18 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
 def _cmd_index(args: argparse.Namespace) -> int:
     """Pipeline stages: ingest (005), frames (006), transcript (007),
-    chunks (008), ocr (009).
+    chunks (008), ocr (009), embeddings index (010).
 
-    The full pipeline (remaining stages, cache, resume) arrives with
-    naryad 011; here the command runs the implemented prefix of stages.
-    Stage and provider failures print a clear message and exit 2.
+    The full pipeline (cache, resume) arrives with naryad 011; here the
+    command runs the implemented prefix of stages. Stage and provider
+    failures print a clear message and exit 2.
     """
     from razkadr.config import load_config
     from razkadr.providers.base import ProviderError
     from razkadr.runctx import RunContext
     from razkadr.stages.chunks import ChunksError, run_chunks
     from razkadr.stages.frames import FramesError, run_frames
+    from razkadr.stages.index import IndexStageError, run_index
     from razkadr.stages.ingest import IngestError, run_ingest
     from razkadr.stages.ocr import OcrError, ocr_params, plan_ocr_candidates, run_ocr
     from razkadr.stages.transcript import TranscriptError, run_transcript
@@ -86,7 +88,8 @@ def _cmd_index(args: argparse.Namespace) -> int:
         transcript_doc = run_transcript(ctx, config)
         chunks_doc = run_chunks(ctx, config)
         ocr_doc = run_ocr(ctx, config)
-    except (IngestError, FramesError, TranscriptError, ChunksError, OcrError, ProviderError) as exc:
+        manifest, space_counts = run_index(ctx, config)
+    except (IngestError, FramesError, TranscriptError, ChunksError, OcrError, IndexStageError, ProviderError) as exc:
         print(f"razkadr index: {exc}", file=sys.stderr)
         return EXIT_FILE_ERROR
     has_audio = (ctx.dir / "audio.wav").is_file()
@@ -101,7 +104,9 @@ def _cmd_index(args: argparse.Namespace) -> int:
     plan = plan_ocr_candidates(frames_doc, ctx.dir, ocr_params(config)) if vlm_configured else []
     sent = len(plan)
     share = sent / accepted if accepted else 0.0
-    print(f"run {ctx.run_id}: ingest ok, frames ok, transcript ok, chunks ok, ocr ok")
+    stage_line = "ingest ok, frames ok, transcript ok, chunks ok, ocr ok"
+    stage_line += ", index ok" if manifest is not None else ", index skipped"
+    print(f"run {ctx.run_id}: {stage_line}")
     print(
         f"  video:      {source['width']}x{source['height']} @ {source['fps']:g} fps, {source['duration_s']:g} s"
     )
@@ -117,6 +122,16 @@ def _cmd_index(args: argparse.Namespace) -> int:
             f"  transcript: lang={transcript_doc['lang']}, {len(transcript_doc['segments'])} segments"
         )
         print(f"  chunks:     {len(chunks_doc['chunks'])}")
+    if manifest is not None:
+        counts = " ".join(
+            f"{space} {space_counts.get(space, 0)}" for space in ("frames", "chunks", "ocr")
+        )
+        print(
+            f"  index:      {manifest['num_vectors']} vectors ({counts}), "
+            f"dim {manifest['dim']}, {manifest['provider']}/{manifest['model']}"
+        )
+    else:
+        print("  index:      skipped (nothing to embed or no [embeddings] provider)")
     print(f"  dir:        {ctx.dir}")
     return EXIT_OK
 
@@ -162,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_index = sub.add_parser(
         "index",
-        help="Ingest a video, extract frames, transcribe, chunk the text, OCR captions (naryads No005-No009)",
+        help="Ingest a video, extract frames, transcribe, chunk the text, OCR captions, embed (naryads No005-No010)",
     )
     p_index.add_argument("input", help="Path to a video file, or a URL for yt-dlp")
     _add_common_args(p_index)

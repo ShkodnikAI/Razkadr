@@ -225,7 +225,8 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The razkadr CLI parser (split out of main for tests and help checks)."""
     parser = argparse.ArgumentParser(prog="razkadr", description="Video in, deck out.")
     parser.add_argument("--version", action="version", version=f"razkadr {__version__}")
     parser.add_argument(
@@ -271,6 +272,11 @@ def main(argv: list[str] | None = None) -> int:
         _add_common_args(p_stub)
         p_stub.set_defaults(func=_cmd_stub, cmd=name, naryad=naryad)
 
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     from razkadr.log import setup_logging

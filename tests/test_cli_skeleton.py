@@ -19,10 +19,11 @@ def test_stub_commands_exit_3_with_message(cmd, capsys):
 def test_stub_accepts_common_interface(tmp_path):
     """Unified interface: --config/--force/--runs-dir/--resume parse and are accepted.
 
-    Index became a real command (naryad 005), so the stub check uses select.
+    Index became a real command (naryad 005), select became real (naryad
+    014), so the stub check uses text.
     """
     code = main([
-        "select", "--config", str(tmp_path / "missing.toml"), "--force",
+        "text", "--config", str(tmp_path / "missing.toml"), "--force",
         "--runs-dir", str(tmp_path / "runs"), "--resume", "20260101T000000Z_deadbeef",
     ])
     assert code == EXIT_NOT_IMPLEMENTED
@@ -43,7 +44,7 @@ def test_no_command_prints_help_and_exits_zero(capsys):
 def test_verbose_flag_enables_debug_json_logging(capsys):
     from razkadr.log import get_logger
 
-    assert main(["--verbose", "select"]) == EXIT_NOT_IMPLEMENTED
+    assert main(["--verbose", "text"]) == EXIT_NOT_IMPLEMENTED
     err = capsys.readouterr().err
     assert '"level": "DEBUG"' not in err  # nothing debug-logged yet, but handler is DEBUG
     get_logger("probe").debug("verbose probe works")

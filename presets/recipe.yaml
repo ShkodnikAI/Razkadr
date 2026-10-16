@@ -12,7 +12,9 @@ title: "Рецепты (кулинарные видео)"
 description: >
   Первый пресет Razkadr для кулинарных роликов. Роли образуют документ
   «hero → ingredients → prep → steps → serving». Запросы и веса —
-  стартовые, уточняются по метрикам шлюза C.
+  стартовые, уточняются по метрикам шлюза C. Веса подключены к сигналам
+  гибридного поиска №012: embedding — векторные сигналы (image+text),
+  keyword — BM25, sharpness/exposure — метрики кадров (№006).
 
 # steps must not cluster on one scene: consecutive steps keep this distance
 min_step_gap_s: 15
@@ -29,9 +31,10 @@ roles:
       ru: ["готовое блюдо", "финальная подача", "красиво сервированный стол"]
       en: ["finished dish", "plating", "final presentation"]
     weights:
-      embedding: 0.55
+      embedding: 0.45
+      keyword: 0.15
       sharpness: 0.25
-      exposure: 0.20
+      exposure: 0.15
     constraints:
       min_sharpness: 0.35
       face_penalty: 0.30
@@ -45,9 +48,10 @@ roles:
       ru: ["ингредиенты на столе", "все продукты разложены", "подготовка продуктов"]
       en: ["ingredients laid out", "mise en place", "all ingredients on the table"]
     weights:
-      embedding: 0.60
+      embedding: 0.50
+      keyword: 0.15
       sharpness: 0.20
-      exposure: 0.20
+      exposure: 0.15
     constraints:
       min_sharpness: 0.30
       face_penalty: 0.20
@@ -62,9 +66,10 @@ roles:
       ru: ["нарезка продуктов", "замешивание теста", "измельчение", "маринование"]
       en: ["chopping", "mixing dough", "slicing", "marinating"]
     weights:
-      embedding: 0.50
+      embedding: 0.40
+      keyword: 0.15
       sharpness: 0.30
-      exposure: 0.20
+      exposure: 0.15
     constraints:
       min_sharpness: 0.30
       hands_penalty: 0.10
@@ -78,9 +83,10 @@ roles:
       ru: ["шаг приготовления", "жарка на плите", "варка", "перемешивание", "в духовке"]
       en: ["cooking step", "frying pan", "boiling", "stirring", "in the oven"]
     weights:
-      embedding: 0.55
+      embedding: 0.45
+      keyword: 0.15
       sharpness: 0.25
-      exposure: 0.20
+      exposure: 0.15
     constraints:
       min_sharpness: 0.30
 
@@ -93,9 +99,10 @@ roles:
       ru: ["подача блюда", "порция на тарелке", "дегустация"]
       en: ["serving the dish", "plated portion", "tasting"]
     weights:
-      embedding: 0.60
+      embedding: 0.50
+      keyword: 0.15
       sharpness: 0.20
-      exposure: 0.20
+      exposure: 0.15
     constraints:
       min_sharpness: 0.35
       face_penalty: 0.10

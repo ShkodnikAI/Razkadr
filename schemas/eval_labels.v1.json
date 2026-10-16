@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://razkadr.dev/schemas/eval_labels.v1.json",
+  "title": "Razkadr eval labels",
+  "description": "Ground-truth labels of one reference video (naryad 003): marked moments by role. Lives at data/eval/labels/<video_id>.json next to data/eval/videos/<video_id>.mp4 and a SOURCES.md row. See data/eval/README.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "video_id",
+    "tags"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "#/$defs/schemaVersion"
+    },
+    "video_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "Video identifier; must match the file name stems of data/eval/videos/<video_id>.mp4 and of this labels file."
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "ru",
+          "en",
+          "voice",
+          "silent",
+          "onscreen-text",
+          "poor-quality"
+        ],
+        "description": "Tags from the fixed dictionary: language (ru, en), audio (voice, silent), onscreen-text, poor-quality."
+      }
+    },
+    "hero": {
+      "$ref": "#/$defs/moments",
+      "description": "Appetizing hero moments (ready dish, main shot); eval-check requires at least 1."
+    },
+    "ingredients": {
+      "$ref": "#/$defs/moments",
+      "description": "Ingredient layout moments; eval-check requires at least 1."
+    },
+    "steps": {
+      "$ref": "#/$defs/moments",
+      "description": "Process steps in chronological order; eval-check requires at least 5."
+    }
+  },
+  "$defs": {
+    "moments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "t"
+        ],
+        "properties": {
+          "t": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Marked moment, seconds from the start of the video; must not exceed the video duration."
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional human note, e.g. what happens at this moment."
+          }
+        }
+      }
+    },
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "Artifact schema version, semver (patch may be omitted)."
+    }
+  }
+}

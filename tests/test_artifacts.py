@@ -20,6 +20,7 @@ EXAMPLE_FILE = {
     "ocr": "ocr.json",
     "index": "index.json",
     "run": "run.json",
+    "eval_labels": "eval_labels.json",  # naryad 003: not a stage artifact, markup of a reference video
 }
 
 

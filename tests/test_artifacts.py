@@ -21,6 +21,7 @@ EXAMPLE_FILE = {
     "index": "index.json",
     "run": "run.json",
     "eval_labels": "eval_labels.json",  # naryad 003: not a stage artifact, markup of a reference video
+    "preset": "preset.json",  # naryad 013: domain scenario (YAML in presets/, JSON is a valid subset)
 }
 
 

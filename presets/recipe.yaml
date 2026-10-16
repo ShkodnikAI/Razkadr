@@ -1,0 +1,101 @@
+# Preset: recipe (naryad 013)
+# The domain scenario for cooking videos: roles form the document
+# "hero -> ingredients -> prep -> steps -> serving". Queries and weights are
+# STARTING VALUES chosen by design, not measurements -- they are refined by
+# the gateway C metrics (naryad 015/016). Signals so far: embedding
+# (visual similarity search, naryad 010), sharpness and exposure
+# (frames stage, naryad 006). See docs/presets.md for the format.
+
+schema_version: "1.0"
+name: recipe
+title: "Рецепты (кулинарные видео)"
+description: >
+  Первый пресет Razkadr для кулинарных роликов. Роли образуют документ
+  «hero → ingredients → prep → steps → serving». Запросы и веса —
+  стартовые, уточняются по метрикам шлюза C.
+
+# steps must not cluster on one scene: consecutive steps keep this distance
+min_step_gap_s: 15
+
+order: [hero, ingredients, prep, steps, serving]
+
+roles:
+  hero:
+    min: 1
+    max: 1
+    candidates: 20
+    alternatives: 3
+    queries:
+      ru: ["готовое блюдо", "финальная подача", "красиво сервированный стол"]
+      en: ["finished dish", "plating", "final presentation"]
+    weights:
+      embedding: 0.55
+      sharpness: 0.25
+      exposure: 0.20
+    constraints:
+      min_sharpness: 0.35
+      face_penalty: 0.30
+
+  ingredients:
+    min: 1
+    max: 1
+    candidates: 20
+    alternatives: 3
+    queries:
+      ru: ["ингредиенты на столе", "все продукты разложены", "подготовка продуктов"]
+      en: ["ingredients laid out", "mise en place", "all ingredients on the table"]
+    weights:
+      embedding: 0.60
+      sharpness: 0.20
+      exposure: 0.20
+    constraints:
+      min_sharpness: 0.30
+      face_penalty: 0.20
+      hands_penalty: 0.10
+
+  prep:
+    min: 0
+    max: null        # as many as the video shows
+    candidates: 10
+    alternatives: 2
+    queries:
+      ru: ["нарезка продуктов", "замешивание теста", "измельчение", "маринование"]
+      en: ["chopping", "mixing dough", "slicing", "marinating"]
+    weights:
+      embedding: 0.50
+      sharpness: 0.30
+      exposure: 0.20
+    constraints:
+      min_sharpness: 0.30
+      hands_penalty: 0.10
+
+  steps:
+    min: 3
+    max: 12
+    candidates: 15
+    alternatives: 2
+    queries:
+      ru: ["шаг приготовления", "жарка на плите", "варка", "перемешивание", "в духовке"]
+      en: ["cooking step", "frying pan", "boiling", "stirring", "in the oven"]
+    weights:
+      embedding: 0.55
+      sharpness: 0.25
+      exposure: 0.20
+    constraints:
+      min_sharpness: 0.30
+
+  serving:
+    min: 0
+    max: 1
+    candidates: 10
+    alternatives: 2
+    queries:
+      ru: ["подача блюда", "порция на тарелке", "дегустация"]
+      en: ["serving the dish", "plated portion", "tasting"]
+    weights:
+      embedding: 0.60
+      sharpness: 0.20
+      exposure: 0.20
+    constraints:
+      min_sharpness: 0.35
+      face_penalty: 0.10

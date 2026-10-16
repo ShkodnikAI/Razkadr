@@ -12,6 +12,8 @@ license = {text = "Apache-2.0"}
 dependencies = [
     "jsonschema>=4",
     "yt-dlp",
+    # preset loading (naryad 013): domain scenario YAML (presets/recipe.yaml)
+    "pyyaml>=6",
     # frames stage (naryad 006): scene detection, metrics, perceptual hashing
     "scenedetect>=0.7",
     # headless build avoids GUI deps on servers/CI; the full opencv-python

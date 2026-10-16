@@ -1,0 +1,150 @@
+{
+  "$comment": "Public list prices copied from official pricing pages. Verified: 2026-10-16. Used by measure.py to convert measured usage into USD cost. price_per_mtok = USD per 1M tokens; price_per_minute = USD per minute of audio. Null price = pay-as-you-go tariff not yet verified on an official page (требует уточнения).",
+  "verified_date": "2026-10-16",
+  "asr": {
+    "gemini-transcribe": {
+      "provider": "Google Gemini API",
+      "model": "gemini-3.5-transcribe",
+      "price_per_minute": 0.003,
+      "price_per_mtok": 2.0,
+      "unit_note": "audio billed as 25 tokens per second (1500 tokens/min), $2/1M audio tokens ~= $0.003/min",
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "status": "подходит"
+    },
+    "elevenlabs-scribe": {
+      "provider": "ElevenLabs",
+      "model": "scribe_v2",
+      "price_per_minute": 0.0037,
+      "unit_note": "$0.22/hour, pay-as-you-go",
+      "source": "https://elevenlabs.io/pricing/api",
+      "status": "подходит"
+    },
+    "deepgram-nova3": {
+      "provider": "Deepgram",
+      "model": "nova-3",
+      "price_per_minute": 0.0052,
+      "unit_note": "multilingual (auto language detection); monolingual $0.0043/min",
+      "source": "https://deepgram.com/pricing",
+      "status": "подходит"
+    },
+    "openai-transcribe": {
+      "provider": "OpenAI",
+      "model": "gpt-transcribe",
+      "price_per_minute": 0.0045,
+      "source": "https://platform.openai.com/docs/models/gpt-transcribe",
+      "status": "подходит"
+    },
+    "openai-4o-mini-transcribe": {
+      "provider": "OpenAI",
+      "model": "gpt-4o-mini-transcribe",
+      "price_per_mtok": 1.25,
+      "output_price_per_mtok": 5.0,
+      "unit_note": "token-billed; per-minute cost depends on billed audio tokens - measure.py reports billed tokens",
+      "source": "https://platform.openai.com/docs/models/gpt-4o-mini-transcribe",
+      "status": "требует уточнения"
+    }
+  },
+  "embed": {
+    "openai-text-embedding-3-small": {
+      "provider": "OpenAI",
+      "model": "text-embedding-3-small",
+      "dimensions": 1536,
+      "price_per_mtok": 0.02,
+      "unit_note": "text only (no image input); ~62500 pages per $1 per official page",
+      "source": "https://platform.openai.com/docs/guides/embeddings",
+      "status": "подходит"
+    },
+    "openai-text-embedding-3-large": {
+      "provider": "OpenAI",
+      "model": "text-embedding-3-large",
+      "dimensions": 3072,
+      "price_per_mtok": 0.13,
+      "unit_note": "text only (no image input)",
+      "source": "https://platform.openai.com/docs/guides/embeddings",
+      "status": "подходит"
+    },
+    "cohere-embed-v4": {
+      "provider": "Cohere",
+      "model": "embed-v4.0",
+      "dimensions": 1536,
+      "price_per_mtok": null,
+      "unit_note": "multimodal (image+text); pay-as-you-go per-token price not verifiable from official pages fetched 2026-10-16 (page shows private-deployment Model Vault pricing only)",
+      "source": "https://cohere.com/pricing",
+      "status": "требует уточнения"
+    },
+    "jina-embeddings-v4": {
+      "provider": "Jina AI",
+      "model": "jina-embeddings-v4",
+      "dimensions": 2048,
+      "price_per_mtok": null,
+      "unit_note": "multimodal; pay-as-you-go per-token price not verifiable from official pages fetched 2026-10-16",
+      "source": "https://jina.ai/pricing",
+      "status": "требует уточнения"
+    },
+    "gemini-embedding": {
+      "provider": "Google Gemini API",
+      "model": "gemini-embedding-001",
+      "dimensions": 3072,
+      "price_per_mtok": null,
+      "unit_note": "text only; per-token price not shown on the pricing page fetched 2026-10-16 (verify in AI Studio before runs)",
+      "source": "https://ai.google.dev/gemini-api/docs/embeddings",
+      "status": "требует уточнения"
+    }
+  },
+  "vlm": {
+    "gemini-flashlite": {
+      "provider": "Google Gemini API",
+      "model": "gemini-3.5-flash-lite",
+      "price_per_mtok": 0.3,
+      "unit_note": "single rate for all input modalities (text/image/audio/video), standard tier; batch $0.15",
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "status": "подходит"
+    },
+    "gemini-flash": {
+      "provider": "Google Gemini API",
+      "model": "gemini-3.7-flash",
+      "price_per_mtok_in": 0.75,
+      "price_per_mtok_out": 3.75,
+      "unit_note": "promo pricing through 2026-12-31; doubles starting 2027-01-01",
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "status": "подходит"
+    },
+    "openai-luna": {
+      "provider": "OpenAI",
+      "model": "gpt-6-luna",
+      "price_per_mtok_in": null,
+      "price_per_mtok_out": null,
+      "unit_note": "batch/flex short-context $0.05 in / $0.25 out per 1M tokens; standard-tier and vision token prices not verifiable from official pages fetched 2026-10-16",
+      "source": "https://platform.openai.com/docs/pricing",
+      "status": "требует уточнения"
+    }
+  },
+  "llm": {
+    "openai-luna": {
+      "provider": "OpenAI",
+      "model": "gpt-6-luna",
+      "price_per_mtok_in": null,
+      "price_per_mtok_out": null,
+      "unit_note": "batch/flex short-context $0.05 in / $0.25 out; standard tier TBD",
+      "source": "https://platform.openai.com/docs/pricing",
+      "status": "требует уточнения"
+    },
+    "gemini-flashlite": {
+      "provider": "Google Gemini API",
+      "model": "gemini-3.5-flash-lite",
+      "price_per_mtok": 0.3,
+      "unit_note": "single input rate, all modalities; output price not shown on fetched portion of the page (verify before runs)",
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "status": "требует уточнения"
+    },
+    "gemini-flash": {
+      "provider": "Google Gemini API",
+      "model": "gemini-3.7-flash",
+      "price_per_mtok_in": 0.75,
+      "price_per_mtok_out": 3.75,
+      "unit_note": "promo through 2026-12-31; doubles 2027-01-01",
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "status": "подходит"
+    }
+  }
+}

@@ -5,8 +5,9 @@ integrity of the reference set), index (the full indexing
 pipeline: ingest + frames + transcript + chunks + ocr + embeddings index,
 naryads 005-010 glued together with cache, resume and a final summary in
 naryad 011), gallery (real, naryad 041: static HTML of the run's frames
-and selection results) and stubs for the remaining pipeline commands
-(select/text/build/eval) with a unified interface
+and selection results), select (real, naryad 014: preset + hybrid search
+-> draft Storyboard) and stubs for the remaining pipeline commands
+(text/build/eval) with a unified interface
 --config/--force/--runs-dir/--resume; their logic arrives with later
 naryads.
 Exit codes: 0 ok, 1 invalid document, 2 file/IO error, 3 command not
@@ -27,7 +28,6 @@ EXIT_NOT_IMPLEMENTED = 3
 
 # stub command -> owning naryad (shown in help and stub message)
 STUB_COMMANDS = {
-    "select": "014",
     "text": "017",
     "build": "028",
     "eval": "015",
@@ -254,6 +254,62 @@ def data_summary(run_dir: str) -> str:
     return f"frames: {len(frames) - rejected} accepted, {rejected} rejected, {len(frames)} total"
 
 
+def _cmd_select(args: argparse.Namespace) -> int:
+    """Episode selection (naryad 014): preset + hybrid search (012) -> a
+draft Storyboard without text, valid per naryad 002. Episodes marked
+    user_edited in the existing storyboard survive re-selection. Writes
+    <run_dir>/storyboard.json (or --out) and the selection report
+    select.json next to it. 0 = ok, 2 = the selection cannot run."""
+    from pathlib import Path as _Path
+
+    from razkadr.config import load_config
+    from razkadr.presets import PresetError
+    from razkadr.providers.base import ProviderError
+    from razkadr.providers.layer import ProviderLayer
+    from razkadr.runctx import RunContext
+    from razkadr.stages.select import SelectError, run_select
+
+    run_dir = _Path(args.run_dir)
+    if not run_dir.is_dir():
+        print(f"razkadr select: run directory not found: {run_dir}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    preset_path = _Path(args.preset)
+    if not preset_path.is_file():
+        print(
+            f"razkadr select: preset not found: {preset_path} (pass a YAML path, e.g. --preset presets/recipe.yaml)",
+            file=sys.stderr,
+        )
+        return EXIT_FILE_ERROR
+    config = load_config(args.config)
+    try:
+        ctx = RunContext(run_dir.parent, run_id=run_dir.name, config=config)
+        layer = ProviderLayer(config, ctx)
+        embeddings = layer.embeddings(stage="select")
+        llm = layer.llm(stage="select") if (config.get("llm") or {}).get("provider") else None
+        storyboard, report = run_select(run_dir, preset_path, config, embeddings=embeddings, llm=llm)
+    except (SelectError, PresetError, ProviderError) as exc:
+        print(f"razkadr select: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    out = _Path(args.out) if args.out else run_dir / "storyboard.json"
+    report_path = run_dir / "select.json"
+    try:
+        out.write_text(json.dumps(storyboard, ensure_ascii=False, indent=2), encoding="utf-8")
+        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError as exc:
+        print(f"razkadr select: cannot write artifacts: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    counts: dict[str, int] = {}
+    for ep in storyboard["episodes"]:
+        counts[ep["role"]] = counts.get(ep["role"], 0) + 1
+    role_line = ", ".join(f"{role} {n}" for role, n in counts.items()) or "no episodes"
+    print(f"select: {out} ({len(storyboard['episodes'])} episodes: {role_line})")
+    if report["warnings"]:
+        for warning in report["warnings"]:
+            print(f"  warning: {warning}", file=sys.stderr)
+    print(f"  report:   {report_path}")
+    return EXIT_OK
+
+
 def _cmd_stub(args: argparse.Namespace) -> int:
     print(
         f"razkadr {args.cmd}: not implemented yet (planned: naryad No{args.naryad})",
@@ -353,6 +409,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output HTML path (default: <run_dir>/gallery.html)",
     )
     p_gallery.set_defaults(func=_cmd_gallery)
+
+    p_select = sub.add_parser(
+        "select",
+        help="Episode selection: preset + index -> draft Storyboard (naryad No014)",
+    )
+    p_select.add_argument("run_dir", help="Run directory with the index (razkadr index output)")
+    p_select.add_argument(
+        "--preset",
+        default="presets/recipe.yaml",
+        help="Preset YAML path (default: presets/recipe.yaml)",
+    )
+    p_select.add_argument(
+        "--out",
+        default=None,
+        metavar="PATH",
+        help="Output Storyboard path (default: <run_dir>/storyboard.json)",
+    )
+    p_select.add_argument("--config", default=None, help="Path to razkadr.toml (default: search)")
+    p_select.set_defaults(func=_cmd_select)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

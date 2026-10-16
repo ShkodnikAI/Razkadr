@@ -10,7 +10,6 @@ import pytest
 from razkadr.cli import (
     EXIT_FILE_ERROR,
     EXIT_INVALID,
-    EXIT_NOT_IMPLEMENTED,
     EXIT_OK,
     STUB_COMMANDS,
     main,

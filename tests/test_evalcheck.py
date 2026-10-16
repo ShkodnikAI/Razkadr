@@ -308,14 +308,7 @@ def test_cli_eval_check_tolerance_flag(tmp_path, capsys, synthetic_fixtures):
 
 def test_eval_check_no_longer_a_stub():
     assert "eval-check" not in STUB_COMMANDS
-    assert "eval" in STUB_COMMANDS  # still stubbed (naryad 015)
-
-
-def test_cli_eval_still_stub(capsys):
-    code = main(["eval"])
-    captured = capsys.readouterr()
-    assert code == EXIT_NOT_IMPLEMENTED
-    assert "naryad No015" in captured.err
+    assert "eval" not in STUB_COMMANDS  # naryad 015 made the harness real
 
 
 # --------------------------------------------------------- shipped template

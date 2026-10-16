@@ -6,8 +6,9 @@ pipeline: ingest + frames + transcript + chunks + ocr + embeddings index,
 naryads 005-010 glued together with cache, resume and a final summary in
 naryad 011), gallery (real, naryad 041: static HTML of the run's frames
 and selection results), select (real, naryad 014: preset + hybrid search
--> draft Storyboard) and stubs for the remaining pipeline commands
-(text/build/eval) with a unified interface
+-> draft Storyboard), eval (real, naryad 015: hit@k over the reference
+set) and stubs for the remaining pipeline commands (text/build) with a
+unified interface
 --config/--force/--runs-dir/--resume; their logic arrives with later
 naryads.
 Exit codes: 0 ok, 1 invalid document, 2 file/IO error, 3 command not
@@ -30,7 +31,6 @@ EXIT_NOT_IMPLEMENTED = 3
 STUB_COMMANDS = {
     "text": "017",
     "build": "028",
-    "eval": "015",
 }
 
 
@@ -310,6 +310,44 @@ draft Storyboard without text, valid per naryad 002. Episodes marked
     return EXIT_OK
 
 
+def _eval_pct(hits: int, moments: int) -> str:
+    return "n/a" if not moments else f"{hits / moments:.1%}"
+
+
+def _cmd_eval(args: argparse.Namespace) -> int:
+    """Eval harness (naryad 015): hit@k of the hybrid search over the
+    labeled reference set for each --config, cost per video minute,
+    reproducible report.json + report.md. 0 = ok, 2 = cannot run."""
+    from razkadr.evalharness import EvalError, run_eval
+
+    k_list = [int(part) for part in str(args.k).split(",") if part.strip()]
+    try:
+        json_path, md_path = run_eval(
+            args.dir,
+            args.config,
+            k_list=k_list,
+            tolerance=args.tolerance_s,
+            preset_path=args.preset,
+            out_dir=args.out_dir,
+            keep_runs=args.keep_runs,
+        )
+    except EvalError as exc:
+        print(f"razkadr eval: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    report = json.loads(json_path.read_text(encoding="utf-8"))
+    print(f"eval: {md_path} (+ {json_path.name})")
+    for name, result in report["results"].items():
+        roles = ", ".join(
+            f"{role} {_eval_pct(data['hits_by_k']['3'], data['moments'])}"
+            for role, data in result["roles"].items()
+            if data["videos"]
+        )
+        print(f"  {name}: {roles} ({result['cost']['calls']} calls, {result['cost']['amount']:.6f} {result['cost']['currency']})")
+    for warning in report["warnings"]:
+        print(f"  warning: {warning}", file=sys.stderr)
+    return EXIT_OK
+
+
 def _cmd_stub(args: argparse.Namespace) -> int:
     print(
         f"razkadr {args.cmd}: not implemented yet (planned: naryad No{args.naryad})",
@@ -428,6 +466,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_select.add_argument("--config", default=None, help="Path to razkadr.toml (default: search)")
     p_select.set_defaults(func=_cmd_select)
+
+    p_eval = sub.add_parser(
+        "eval",
+        help="Eval harness: hit@k over the labeled reference set, cost, report (naryad No015)",
+    )
+    p_eval.add_argument("dir", help="Reference set directory (videos/ + labels/), e.g. data/eval")
+    p_eval.add_argument(
+        "--config",
+        action="append",
+        required=True,
+        help="Pipeline/search config toml (repeat for comparison: A.toml B.toml)",
+    )
+    p_eval.add_argument("--k", default="1,3", help="Comma-separated k values (default: 1,3)")
+    p_eval.add_argument(
+        "--tolerance-s", type=float, default=2.0, help="Hit tolerance in seconds (default: 2)"
+    )
+    p_eval.add_argument(
+        "--preset", default="presets/recipe.yaml", help="Preset YAML (default: presets/recipe.yaml)"
+    )
+    p_eval.add_argument(
+        "--out-dir", default="eval", help="Report output directory (default: eval/)"
+    )
+    p_eval.add_argument(
+        "--keep-runs", action="store_true", help="Keep the per-video run directories (default: removed)"
+    )
+    p_eval.set_defaults(func=_cmd_eval)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

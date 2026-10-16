@@ -4,7 +4,8 @@ Subcommands: validate (real, naryad 002/035), eval-check (real, naryad 003:
 integrity of the reference set), index (the full indexing
 pipeline: ingest + frames + transcript + chunks + ocr + embeddings index,
 naryads 005-010 glued together with cache, resume and a final summary in
-naryad 011) and stubs for the remaining pipeline commands
+naryad 011), gallery (real, naryad 041: static HTML of the run's frames
+and selection results) and stubs for the remaining pipeline commands
 (select/text/build/eval) with a unified interface
 --config/--force/--runs-dir/--resume; their logic arrives with later
 naryads.
@@ -206,6 +207,43 @@ def _cmd_index(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_gallery(args: argparse.Namespace) -> int:
+    """Static HTML gallery of a run (naryad 041): frames sheet with copyable
+    timecodes, selection view when storyboard.json exists, ground-truth
+    labels marking with --labels. Writes <run_dir>/gallery.html (or --out).
+    0 = ok, 2 = the gallery cannot be built (no run dir, no frames.json,
+    invalid storyboard/labels JSON)."""
+    from razkadr.gallery import GalleryError, run_gallery
+
+    try:
+        target = run_gallery(
+            args.run_dir,
+            storyboard=args.storyboard,
+            labels=args.labels,
+            every_s=args.every_s,
+            tolerance_s=args.tolerance_s,
+            out=args.out,
+        )
+    except GalleryError as exc:
+        print(f"razkadr gallery: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    total = data_summary(args.run_dir)
+    print(f"gallery: {target} ({total})")
+    return EXIT_OK
+
+
+def data_summary(run_dir: str) -> str:
+    """One-line frame totals for the gallery console message."""
+    from razkadr.gallery import load_frames
+
+    try:
+        frames = load_frames(Path(run_dir))
+    except Exception:  # noqa: BLE001 - summary is best-effort only
+        return "frames: ?"
+    rejected = sum(1 for f in frames if f.get("rejected"))
+    return f"frames: {len(frames) - rejected} accepted, {rejected} rejected, {len(frames)} total"
+
+
 def _cmd_stub(args: argparse.Namespace) -> int:
     print(
         f"razkadr {args.cmd}: not implemented yet (planned: naryad No{args.naryad})",
@@ -266,6 +304,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="Time matching tolerance in seconds (default: 2)",
     )
     p_evalcheck.set_defaults(func=_cmd_evalcheck)
+
+    p_gallery = sub.add_parser(
+        "gallery",
+        help="Static HTML page: frames with timecodes, selection view, labels (naryad No041)",
+    )
+    p_gallery.add_argument("run_dir", help="Run directory (contains frames.json), e.g. runs/<id>")
+    p_gallery.add_argument(
+        "--storyboard",
+        default=None,
+        metavar="PATH",
+        help="Storyboard JSON (default: <run_dir>/storyboard.json when present)",
+    )
+    p_gallery.add_argument(
+        "--labels",
+        default=None,
+        metavar="PATH",
+        help="Ground-truth labels JSON (data/eval/labels/<id>.json) to mark reference frames",
+    )
+    p_gallery.add_argument(
+        "--every",
+        dest="every_s",
+        type=float,
+        default=0.0,
+        metavar="N",
+        help="Label sheet density: at most one frame every N seconds (0 = all, default)",
+    )
+    p_gallery.add_argument(
+        "--tolerance-s",
+        type=float,
+        default=2.0,
+        help="Labels matching tolerance in seconds (default: 2)",
+    )
+    p_gallery.add_argument(
+        "--out",
+        default=None,
+        metavar="PATH",
+        help="Output HTML path (default: <run_dir>/gallery.html)",
+    )
+    p_gallery.set_defaults(func=_cmd_gallery)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

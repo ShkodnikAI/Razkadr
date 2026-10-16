@@ -86,12 +86,25 @@ def test_missing_root_dir_raises(tmp_path):
         run_eval_check(tmp_path / "nowhere")
 
 
-def test_missing_videos_and_labels_dirs_reported(tmp_path):
+def test_absent_videos_and_labels_dirs_is_empty_set(tmp_path):
+    """git does not track empty directories: a fresh clone has data/eval with
+    SOURCES.md and README.md only, and that is a valid empty set."""
     root = tmp_path / "eval"
     root.mkdir()
+    (root / "SOURCES.md").write_text(SOURCES_TABLE, encoding="utf-8")
     result = run_eval_check(root)
-    assert "videos/: missing directory" in result.violations
-    assert "labels/: missing directory" in result.violations
+    assert result.ok
+    assert (result.videos, result.labels) == (0, 0)
+
+
+def test_missing_videos_dir_still_flags_labels(tmp_path):
+    """With labels present the pairing check catches the absent videos dir."""
+    root = tmp_path / "eval"
+    (root / "labels").mkdir(parents=True)
+    (root / "labels" / "a.json").write_text(json.dumps(valid_label()), encoding="utf-8")
+    (root / "SOURCES.md").write_text(SOURCES_TABLE + source_row("a") + "\n", encoding="utf-8")
+    result = run_eval_check(root)
+    assert "labels/a.json: no videos/a.mp4" in result.violations
 
 
 # ------------------------------------------------------- file-level pairing

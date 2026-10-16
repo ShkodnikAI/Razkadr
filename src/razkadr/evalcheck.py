@@ -189,6 +189,10 @@ def run_eval_check(eval_dir: Path, tolerance_s: float = 2.0) -> EvalCheckResult:
         sources_ids = set()
 
     video_ids: set[str] = set()
+    # An absent videos/ or labels/ directory is an empty set, not a
+    # violation: git does not track empty directories, so a fresh clone of
+    # this repo has data/eval with SOURCES.md and README.md only. Real
+    # gaps are still caught by the pairing checks below.
     if videos_dir.is_dir():
         for path in sorted(videos_dir.iterdir()):
             if not path.is_file():
@@ -199,8 +203,6 @@ def run_eval_check(eval_dir: Path, tolerance_s: float = 2.0) -> EvalCheckResult:
                 )
                 continue
             video_ids.add(path.stem)
-    else:
-        result.violations.append(f"{VIDEOS_DIRNAME}/: missing directory")
 
     label_ids: set[str] = set()
     if labels_dir.is_dir():
@@ -208,8 +210,6 @@ def run_eval_check(eval_dir: Path, tolerance_s: float = 2.0) -> EvalCheckResult:
             if not path.is_file() or path.suffix != ".json":
                 continue
             label_ids.add(path.stem)
-    else:
-        result.violations.append(f"{LABELS_DIRNAME}/: missing directory")
 
     durations: dict[str, float] = {}
 

@@ -39,6 +39,8 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
     Without --kind the file is validated as a Storyboard (naryad 002);
     --kind selects a stage artifact schema (naryad 035, docs/artifacts.md).
+    Presets (naryad 013) are YAML by definition: when the file does not
+    parse as JSON, --kind preset falls back to a YAML load.
     """
     path = Path(args.file)
     try:
@@ -49,8 +51,16 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
-        print(f"razkadr validate: invalid JSON in {path}: {exc}", file=sys.stderr)
-        return EXIT_FILE_ERROR
+        if args.kind != "preset":
+            print(f"razkadr validate: invalid JSON in {path}: {exc}", file=sys.stderr)
+            return EXIT_FILE_ERROR
+        try:
+            import yaml
+
+            data = yaml.safe_load(raw)
+        except yaml.YAMLError as yexc:
+            print(f"razkadr validate: invalid YAML in {path}: {yexc}", file=sys.stderr)
+            return EXIT_FILE_ERROR
 
     from razkadr.validation import validate_document
 

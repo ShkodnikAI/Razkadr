@@ -54,6 +54,7 @@ KINDS: dict[str, str] = {
     "index": "index.v1.json",
     "run": "run.v1.json",
     "eval_labels": "eval_labels.v1.json",
+    "preset": "preset.v1.json",
 }
 
 

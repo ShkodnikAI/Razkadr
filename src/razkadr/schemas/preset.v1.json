@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://razkadr.dev/schemas/preset.v1.json",
+  "title": "Razkadr preset",
+  "description": "Domain scenario preset (naryad 013): which frame roles the document needs, how they are searched (queries) and scored (weights), their quotas and constraints. A preset is pure data: adding a role or a preset must not require code changes. See docs/presets.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "roles", "order"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "Preset schema version, semver (patch may be omitted). This schema validates major version 1 only."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "description": "Stable preset identifier used in config and CLI (--preset recipe)."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable preset name shown in UI and reports."
+    },
+    "description": {
+      "type": "string",
+      "description": "Free-form note about the scenario: what the preset is for, where the numbers come from."
+    },
+    "roles": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/roleSpec"
+      },
+      "description": "Role name -> role spec. Role names are free (except they must not collide with reserved JSON keys); the selection stage (naryad 014) consumes them as-is."
+    },
+    "order": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "minItems": 1,
+      "description": "Document order of roles; must list every role exactly once (loader checks)."
+    },
+    "min_step_gap_s": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Minimal gap in seconds between consecutive episodes of the same role (e.g. steps must not cluster on one scene)."
+    }
+  },
+  "$defs": {
+    "roleSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max", "queries", "weights"],
+      "properties": {
+        "min": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minimum number of episodes of this role in the storyboard."
+        },
+        "max": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Maximum number of episodes; null means unlimited."
+        },
+        "queries": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "patternProperties": {
+            "^(ru|en)$": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "description": "Search queries per language (v1: ru, en); at least one language, at least one query each."
+        },
+        "weights": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "description": "Search signal -> weight in [0,1]; the loader requires the weights to sum to 1 (the exact signal set is defined by the selection stage, naryad 014)."
+        },
+        "constraints": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Hard quality constraints and demerits applied to candidate frames of this role.",
+          "properties": {
+            "min_sharpness": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Frames below this normalized sharpness are not candidates."
+            },
+            "face_penalty": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Score demerit when a face detector fires in the frame."
+            },
+            "hands_penalty": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Score demerit when a hand detector fires in the frame."
+            }
+          }
+        },
+        "candidates": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many top candidate frames to consider for this role."
+        },
+        "alternatives": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many runner-up frames to keep as alternatives in the Storyboard."
+        }
+      }
+    }
+  }
+}

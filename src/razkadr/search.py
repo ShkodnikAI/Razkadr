@@ -282,6 +282,28 @@ def _inherit_rank(
     return best
 
 
+def role_candidates(
+    run_dir: str | Path,
+    queries: list[str],
+    query_langs: list[str] | None,
+    embeddings=None,
+    llm=None,
+    config: dict | None = None,
+) -> list[SearchHit]:
+    """Best candidates for a role across several queries: each query runs
+    ``hybrid_search`` and a frame keeps its best result (the first query
+    list it appears in wins ties); the returned list is sorted by the same
+    deterministic order (-score, file). Used by the select stage and the
+    eval harness, which rank role queries the same way."""
+    seen: dict[str, SearchHit] = {}
+    langs = query_langs or [None] * len(queries)  # type: ignore[list-item]
+    for query, lang in zip(queries, langs, strict=True):
+        for hit in hybrid_search(run_dir, query, query_lang=lang, embeddings=embeddings, llm=llm, config=config):
+            if hit.file not in seen:
+                seen[hit.file] = hit
+    return sorted(seen.values(), key=lambda hit: (-hit.score, hit.file))
+
+
 def hybrid_search(
     run_dir: str | Path,
     query: str,

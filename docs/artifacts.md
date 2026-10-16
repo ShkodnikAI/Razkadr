@@ -3,7 +3,7 @@
 Каждый запуск конвейера живёт в собственном каталоге `runs/<run_id>/`. Стадия читает артефакты предыдущих и пишет свои; форматы зафиксированы JSON Schema (draft 2020-12), файлы схем — `schemas/<kind>.v1.json`, копии поставляются с пакетом (`src/razkadr/schemas/`, синхронность проверяет тест). Зафиксировав форматы до реализации стадий, можно разрабатывать и принимать стадии независимо (наряды №5–11).
 
 - Валидация: `razkadr validate --kind <kind> <файл>`; без `--kind` файл проверяется как Storyboard (наряд №002).
-- Виды: `storyboard`, `source`, `frames`, `transcript`, `chunks`, `ocr`, `index`, `run`.
+- Виды: `storyboard`, `source`, `frames`, `transcript`, `chunks`, `ocr`, `index`, `run`. Отдельный вид `eval_labels` — разметка эталонного набора (`data/eval/labels/<id>.json`, наряд №003): это не артефакт стадии, целостность всего набора проверяет `razkadr eval-check data/eval` (см. `data/eval/README.md`).
 - Примеры: `examples/artifacts/` — по одному небольшому валидному примеру на каждый артефакт.
 - Каждая схема несёт `schema_version` (semver, см. «Совместимость»).
 

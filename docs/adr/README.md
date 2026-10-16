@@ -9,5 +9,5 @@
 | [0003](0003-pptx-master-format.md) | PPTX как мастер-формат презентаций | accepted |
 | [0004](0004-external-models-byok.md) | Только внешние модели; BYOK | accepted (провайдеры определяет наряд #4) |
 | [0005](0005-video-by-url.md) | Видео по ссылкам | accepted для CLI; для хостед-сервиса deferred |
-| 0006 | Провайдеры по умолчанию (будет создан в наряде #4) | planned |
+| [0006](0006-default-providers.md) | Провайдеры по умолчанию (наряд #4) | proposed |
 | [0007](0007-vectorstore-core.md) | VectorStore ядра: SQLite + numpy; pgvector позже | proposed |

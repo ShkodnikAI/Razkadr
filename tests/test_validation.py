@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from razkadr.validation import validate_storyboard
+from razkadr.validation import validate_document, validate_storyboard
 
 REPO = Path(__file__).resolve().parents[1]
 EXAMPLES = REPO / "examples"
@@ -167,3 +167,51 @@ def test_structural_violations_report_json_paths(episode_patch: dict):
     issues = validate_storyboard(data)
     assert issues, "expected at least one issue"
     assert all(i.path and i.reason for i in issues)
+
+
+# ------------------------------------------------------------- eval_labels
+# Ground-truth markup of a reference video (naryad 003): a validate kind,
+# not a stage artifact. Set-level integrity is tested in test_evalcheck.py.
+
+
+def load_eval_labels_example() -> dict:
+    path = REPO / "examples" / "artifacts" / "eval_labels.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_eval_labels_example_is_valid():
+    assert validate_document(load_eval_labels_example(), kind="eval_labels") == []
+
+
+def test_eval_labels_schema_copies_in_sync():
+    root = REPO / "schemas" / "eval_labels.v1.json"
+    packaged = REPO / "src" / "razkadr" / "schemas" / "eval_labels.v1.json"
+    assert root.read_text(encoding="utf-8") == packaged.read_text(encoding="utf-8")
+
+
+def test_eval_labels_unknown_tag():
+    doc = load_eval_labels_example()
+    doc["tags"] = ["ru", "hu"]
+    issues = validate_document(doc, kind="eval_labels")
+    assert [i for i in issues if i.path == "tags[1]"]
+
+
+def test_eval_labels_bad_video_id_pattern():
+    doc = load_eval_labels_example()
+    doc["video_id"] = "has space"
+    issues = validate_document(doc, kind="eval_labels")
+    assert [i for i in issues if i.path == "video_id"]
+
+
+def test_eval_labels_negative_time_and_unknown_field():
+    doc = load_eval_labels_example()
+    doc["steps"][0]["t"] = -1.0
+    doc["hero"][0]["weight"] = 3
+    issues = validate_document(doc, kind="eval_labels")
+    assert [i for i in issues if i.path == "steps[0].t"]
+    assert [i for i in issues if i.path == "hero[0].weight" and i.reason == "unknown field"]
+
+
+def test_eval_labels_unknown_kind_still_raises():
+    with pytest.raises(KeyError):
+        validate_document({}, "eval_label")

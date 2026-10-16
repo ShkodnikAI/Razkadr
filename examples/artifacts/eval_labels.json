@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "video_id": "ru_voice_01",
+  "tags": ["ru", "voice"],
+  "hero": [{"t": 612.0}],
+  "ingredients": [{"t": 14.5}],
+  "steps": [
+    {"t": 40.0, "note": "нарезка лука"},
+    {"t": 95.0, "note": "обжарка"}
+  ]
+}

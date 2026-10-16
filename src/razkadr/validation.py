@@ -17,7 +17,13 @@ chunks                  chunks.v1.json
 ocr                     ocr.v1.json
 index                   index.v1.json
 run                     run.v1.json
+eval_labels             eval_labels.v1.json
 ======================  =========================
+
+``eval_labels`` is not a stage artifact: it is the ground-truth markup of a
+reference video (``data/eval/labels/<video_id>.json``, naryad 003, see
+``data/eval/README.md``); integrity of the whole set is checked by
+``razkadr eval-check``.
 """
 
 from __future__ import annotations
@@ -47,6 +53,7 @@ KINDS: dict[str, str] = {
     "ocr": "ocr.v1.json",
     "index": "index.v1.json",
     "run": "run.v1.json",
+    "eval_labels": "eval_labels.v1.json",
 }
 
 

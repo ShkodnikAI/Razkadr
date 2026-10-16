@@ -1,10 +1,11 @@
 """Command line entry point.
 
-Subcommands: validate (real, naryad 002/035), index (the full indexing
+Subcommands: validate (real, naryad 002/035), eval-check (real, naryad 003:
+integrity of the reference set), index (the full indexing
 pipeline: ingest + frames + transcript + chunks + ocr + embeddings index,
 naryads 005-010 glued together with cache, resume and a final summary in
 naryad 011) and stubs for the remaining pipeline commands
-(select/text/build/eval/eval-check) with a unified interface
+(select/text/build/eval) with a unified interface
 --config/--force/--runs-dir/--resume; their logic arrives with later
 naryads.
 Exit codes: 0 ok, 1 invalid document, 2 file/IO error, 3 command not
@@ -29,7 +30,6 @@ STUB_COMMANDS = {
     "text": "017",
     "build": "028",
     "eval": "015",
-    "eval-check": "003",
 }
 
 
@@ -60,6 +60,31 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         return EXIT_INVALID
     print("ok")
     return EXIT_OK
+
+
+def _cmd_evalcheck(args: argparse.Namespace) -> int:
+    """Integrity of the reference set (naryad 003): every video has a
+    labels file and a SOURCES entry; labels are valid against
+    eval_labels.v1.json, have the role minimums (1 hero, 1 ingredients,
+    5 steps), no duplicate times within --tolerance-s (default 2, the
+    contract's matching tolerance) and timecodes inside the video
+    duration via ffprobe.
+
+    0 = "N видео, N разметок, нарушений нет", 1 = violations listed,
+    2 = the check itself cannot run (missing directory, no ffprobe).
+    """
+    from razkadr.evalcheck import EvalCheckError, run_eval_check, summarize
+
+    try:
+        result = run_eval_check(Path(args.dir), tolerance_s=args.tolerance_s)
+    except EvalCheckError as exc:
+        print(f"razkadr eval-check: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    if not result.ok:
+        for violation in result.violations:
+            print(violation, file=sys.stderr)
+    print(summarize(result), file=sys.stderr if not result.ok else sys.stdout)
+    return EXIT_OK if result.ok else EXIT_INVALID
 
 
 def _fmt_amount(amount: float) -> str:
@@ -227,6 +252,19 @@ def main(argv: list[str] | None = None) -> int:
     p_index.add_argument("input", help="Path to a video file, or a URL for yt-dlp")
     _add_common_args(p_index)
     p_index.set_defaults(func=_cmd_index)
+
+    p_evalcheck = sub.add_parser(
+        "eval-check",
+        help="Check the reference set: labels, SOURCES, timecodes (naryad No003)",
+    )
+    p_evalcheck.add_argument("dir", help="Reference set directory, e.g. data/eval")
+    p_evalcheck.add_argument(
+        "--tolerance-s",
+        type=float,
+        default=2.0,
+        help="Time matching tolerance in seconds (default: 2)",
+    )
+    p_evalcheck.set_defaults(func=_cmd_evalcheck)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

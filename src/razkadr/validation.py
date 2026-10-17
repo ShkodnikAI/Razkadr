@@ -53,6 +53,7 @@ KINDS: dict[str, str] = {
     "ocr": "ocr.v1.json",
     "index": "index.v1.json",
     "run": "run.v1.json",
+    "slides": "slides.v1.json",
     "eval_labels": "eval_labels.v1.json",
     "preset": "preset.v1.json",
 }

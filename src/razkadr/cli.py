@@ -7,8 +7,8 @@ naryads 005-010 glued together with cache, resume and a final summary in
 naryad 011), gallery (real, naryad 041: static HTML of the run's frames
 and selection results), select (real, naryad 014: preset + hybrid search
 -> draft Storyboard), eval (real, naryad 015: hit@k over the reference
-set) and stubs for the remaining pipeline commands (text/build) with a
-unified interface
+set), layout (real, naryad 021: Storyboard -> slides.json) and stubs for
+the remaining pipeline commands (text/build) with a unified interface
 --config/--force/--runs-dir/--resume; their logic arrives with later
 naryads.
 Exit codes: 0 ok, 1 invalid document, 2 file/IO error, 3 command not
@@ -367,6 +367,41 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _cmd_layout(args: argparse.Namespace) -> int:
+    """Layout engine (naryad 021): Storyboard -> slides.json. 0 = ok,
+    1 = invalid document, 2 = file/IO or config error."""
+    from razkadr.config import load_config
+    from razkadr.stages.layout import LayoutError, layout_storyboard, write_slides
+    from razkadr.validation import validate_document
+
+    path = Path(args.storyboard)
+    try:
+        storyboard = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        print(f"razkadr layout: cannot read {path}: {exc.strerror or exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    except json.JSONDecodeError as exc:
+        print(f"razkadr layout: invalid JSON in {path}: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    issues = validate_document(storyboard, "storyboard")
+    if issues:
+        print("razkadr layout: storyboard is invalid:", file=sys.stderr)
+        for issue in issues[:5]:
+            print(f"  - {issue.path}: {issue.reason}", file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        config = load_config(args.config) if getattr(args, "config", None) else load_config()
+        slides = layout_storyboard(storyboard, config, lang=args.lang)
+    except LayoutError as exc:
+        print(f"razkadr layout: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    out = Path(args.out) if args.out else path.with_name("slides.json")
+    write_slides(slides, out)
+    total_warnings = sum(len(s["warnings"]) for s in slides["slides"]) + len(slides["warnings"])
+    print(f"razkadr layout: {len(slides['slides'])} slide(s) -> {out}" + (f" ({total_warnings} warning(s))" if total_warnings else ""))
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The razkadr CLI parser (split out of main for tests and help checks)."""
     parser = argparse.ArgumentParser(prog="razkadr", description="Video in, deck out.")
@@ -492,6 +527,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--keep-runs", action="store_true", help="Keep the per-video run directories (default: removed)"
     )
     p_eval.set_defaults(func=_cmd_eval)
+
+    p_layout = sub.add_parser(
+        "layout",
+        help="Layout engine: Storyboard -> slides.json with slots and warnings (naryad No021)",
+    )
+    p_layout.add_argument("storyboard", help="Path to a Storyboard JSON (e.g. examples/storyboard.valid.json)")
+    p_layout.add_argument(
+        "--lang",
+        choices=("ru", "en"),
+        default=None,
+        help="Slide caption language (default: project.output_lang, else ru); episode text is not translated",
+    )
+    p_layout.add_argument(
+        "--out",
+        default=None,
+        metavar="PATH",
+        help="Output slides path (default: <storyboard dir>/slides.json)",
+    )
+    p_layout.add_argument("--config", default=None, help="Path to razkadr.toml (default: search)")
+    p_layout.set_defaults(func=_cmd_layout)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

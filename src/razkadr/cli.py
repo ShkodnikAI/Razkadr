@@ -402,6 +402,66 @@ def _cmd_layout(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_export_html(args: argparse.Namespace) -> int:
+    """Self-contained HTML deck (naryad 026). 0 = ok, 2 = file error."""
+    from razkadr.render.html import ExportError, export_html
+
+    slides_path = Path(args.slides)
+    try:
+        slides_doc = json.loads(slides_path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        print(f"razkadr export-html: cannot read {slides_path}: {exc.strerror or exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    except json.JSONDecodeError as exc:
+        print(f"razkadr export-html: invalid JSON in {slides_path}: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    storyboard = None
+    storyboard_path = Path(args.storyboard) if args.storyboard else slides_path.with_name("storyboard.json")
+    if storyboard_path.is_file():
+        try:
+            storyboard = json.loads(storyboard_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(
+                f"razkadr export-html: storyboard {storyboard_path} unreadable ({exc}); timecodes stay as text",
+                file=sys.stderr,
+            )
+    out = Path(args.out)
+    try:
+        export_html(slides_doc, out, storyboard=storyboard, base_dir=slides_path.parent)
+    except ExportError as exc:
+        print(f"razkadr export-html: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    print(f"razkadr export-html: {out} (+ {out.parent / 'deck_assets'}/)")
+    return EXIT_OK
+
+
+def _cmd_export_json(args: argparse.Namespace) -> int:
+    """Storyboard -> canonical JSON with re-validation (naryad 026).
+    0 = ok, 1 = invalid, 2 = file error."""
+    from razkadr.render.html import export_json
+    from razkadr.validation import validate_document
+
+    path = Path(args.storyboard)
+    try:
+        storyboard = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        print(f"razkadr export-json: cannot read {path}: {exc.strerror or exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    except json.JSONDecodeError as exc:
+        print(f"razkadr export-json: invalid JSON in {path}: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    issues = validate_document(storyboard, "storyboard")
+    if issues:
+        print("razkadr export-json: storyboard is invalid:", file=sys.stderr)
+        for issue in issues[:5]:
+            print(f"  - {issue.path}: {issue.reason}", file=sys.stderr)
+        return EXIT_INVALID
+    out = Path(args.out)
+    export_json(storyboard, out)
+    print(f"razkadr export-json: {out}")
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The razkadr CLI parser (split out of main for tests and help checks)."""
     parser = argparse.ArgumentParser(prog="razkadr", description="Video in, deck out.")
@@ -547,6 +607,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_layout.add_argument("--config", default=None, help="Path to razkadr.toml (default: search)")
     p_layout.set_defaults(func=_cmd_layout)
+
+    p_export_html = sub.add_parser(
+        "export-html",
+        help="Self-contained HTML deck with timecode links (naryad No026)",
+    )
+    p_export_html.add_argument("slides", help="Path to slides.json (razkadr layout output)")
+    p_export_html.add_argument(
+        "--out", default="deck.html", metavar="PATH", help="Output HTML path (default: deck.html)"
+    )
+    p_export_html.add_argument(
+        "--storyboard",
+        default=None,
+        metavar="PATH",
+        help="Storyboard JSON for timecode links (default: storyboard.json next to slides; links degrade to text without it)",
+    )
+    p_export_html.set_defaults(func=_cmd_export_html)
+
+    p_export_json = sub.add_parser(
+        "export-json",
+        help="Re-validate a Storyboard and write canonical JSON (naryad No026)",
+    )
+    p_export_json.add_argument("storyboard", help="Path to a Storyboard JSON")
+    p_export_json.add_argument(
+        "--out", default="storyboard.out.json", metavar="PATH", help="Output path (default: storyboard.out.json)"
+    )
+    p_export_json.set_defaults(func=_cmd_export_json)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

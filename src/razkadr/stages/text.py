@@ -443,8 +443,14 @@ def _episode_text(
     role = str(episode.get("role") or "")
     limit = int(params["role_limits"].get(role, params["default_limit"]))
     existing_text = episode.get("text") or {}
+    # user_edited preservation (storyboard contract, naryad 019): an episode
+    # the user changed is copied through as-is - text, frame, everything -
+    # no provider is called for it, re-runs and config changes included.
+    # A partial text (schema requires only "mode") counts as text: the user
+    # wrote it, the stage does not "complete" user content.
     if episode.get("user_edited") and existing_text:
-        return {"id": episode_id, "role": role, "kept": True, "text_mode": existing_text.get("mode")}
+        return {"id": episode_id, "role": role, "kept": True, "user_edited": True,
+                "text_mode": existing_text.get("mode")}
 
     t_start = float(episode.get("t_start") or 0.0)
     t_end = float(episode.get("t_end") or 0.0)

@@ -874,3 +874,142 @@ def test_cli_text_output_lang_override(env, fake_llm_calls, capsys):
     doc = _read_json(ctx, STORYBOARD_JSON)
     text = doc["episodes"][0]["text"]
     assert text["output"] == "Bake 15 minutes." and text["output_lang"] == "en"
+
+
+# --- naryad 019: user edits survive re-generation -------------------------------------
+
+
+def test_user_edited_survives_rerun_with_different_mode_and_config(env, fake_llm_calls, fake_vlm_calls):
+    """Правка + повторный razkadr text с другой конфигурацией -> правка на месте."""
+    _, config, ctx = env
+    config["llm"] = {"provider": "fake", "answer": "первый ответ"}
+    config["vlm"] = {"provider": "fake", "answer": "кадр 1"}
+    make_frame(ctx, "frames/f1.jpg")
+    make_frame(ctx, "frames/f2.jpg")
+    edited_text = {"mode": "verbatim", "source_lang": "ru", "original": "моя правка", "output": "моя правка", "output_lang": "ru"}
+    write_draft(ctx, [
+        episode("ep-steps", "steps", 0.0, 10.0, "frames/f1.jpg", user_edited=True, text=edited_text),
+        episode("ep-serving", "serving", 40.0, 50.0, "frames/f2.jpg"),
+    ])
+    write_transcript(ctx, [seg(0, 10, "текст")])
+    first = run_text(ctx, config)[0]
+
+    # re-run with a completely different configuration and provider answers
+    config["text"] = {"mode": "condensed", "output_lang": "en"}
+    config["llm"] = {"provider": "fake", "answer": "другой ответ"}
+    config["vlm"] = {"provider": "fake", "answer": "кадр 2"}
+    second, report = run_text(ctx, config)
+
+    by_id_first = {e["id"]: e for e in first["episodes"]}
+    by_id_second = {e["id"]: e for e in second["episodes"]}
+    assert by_id_second["ep-steps"]["text"] == edited_text == by_id_first["ep-steps"]["text"]
+    # non-edited episode was re-processed (not kept): the call cache returns
+    # the deterministic first answer for identical inputs (naryad 033), which
+    # is the documented repeat behavior - deterministic and free
+    serving_entry = next(e for e in report["episodes"] if e["id"] == "ep-serving")
+    assert by_id_second["ep-serving"]["text"]["mode"] == "described"
+    assert not serving_entry.get("kept") and serving_entry.get("text_mode") == "described"
+    steps_entry = next(e for e in report["episodes"] if e["id"] == "ep-steps")
+    assert steps_entry.get("kept") and steps_entry.get("user_edited")
+
+
+def test_user_edited_survives_disk_roundtrip_and_double_rerun(env, fake_llm_calls):
+    _, config, ctx = env
+    config["llm"] = {"provider": "fake", "answer": "ответ"}
+    make_frame(ctx, "frames/f1.jpg")
+    edited_text = {"mode": "condensed", "source_lang": "ru", "original": "о", "output": "правка пользователя", "output_lang": "ru"}
+    write_draft(ctx, [
+        episode("ep-a", "steps", 0.0, 10.0, "frames/f1.jpg"),
+        episode("ep-b", "serving", 40.0, 50.0, "frames/f1.jpg", user_edited=True, text=edited_text),
+    ])
+    write_transcript(ctx, [seg(0, 10, "текст")])
+
+    run_text(ctx, config)
+    run_text(ctx, config)  # double rerun
+    on_disk = json.loads((ctx.dir / STORYBOARD_JSON).read_text(encoding="utf-8"))
+
+    ep_b = next(e for e in on_disk["episodes"] if e["id"] == "ep-b")
+    assert ep_b["text"] == edited_text
+    assert ep_b["user_edited"] is True
+
+
+def test_user_edited_partial_text_counts_as_text(env, fake_llm_calls):
+    """Схема требует у text только mode: частичный текст пользователя не «дополняется»."""
+    _, config, ctx = env
+    config["llm"] = {"provider": "fake", "answer": "дополнение"}
+    make_frame(ctx, "frames/f1.jpg")
+    partial = {"mode": "verbatim"}
+    write_draft(ctx, [episode("ep-a", "steps", 0.0, 10.0, "frames/f1.jpg", user_edited=True, text=partial)])
+    write_transcript(ctx, [seg(0, 10, "текст")])
+
+    storyboard, report = run_text(ctx, config)
+
+    assert storyboard["episodes"][0]["text"] == partial
+    entry = report["episodes"][0]
+    assert entry["kept"] and entry["text_mode"] == "verbatim"
+    assert fake_llm_calls == []
+
+
+def test_user_edited_frame_choice_not_touched(env, fake_llm_calls, fake_vlm_calls):
+    _, config, ctx = env
+    config["llm"] = {"provider": "fake"}
+    config["vlm"] = {"provider": "fake", "answer": "описание"}
+    make_frame(ctx, "frames/f1.jpg")
+    make_frame(ctx, "frames/f2.jpg")
+    user_frame = {"path": "frames/f2.jpg", "t": 45.0, "score": 0.5}
+    ep = episode("ep-a", "serving", 40.0, 50.0, "frames/f1.jpg",
+                 user_edited=True, text={"mode": "described", "output": "свой текст"})
+    ep["frame"] = user_frame
+    write_draft(ctx, [ep])
+    write_transcript(ctx, [])
+
+    storyboard = run_text(ctx, config)[0]
+
+    ep = storyboard["episodes"][0]
+    assert ep["frame"] == user_frame  # the user's frame choice is preserved
+    assert ep["text"]["output"] == "свой текст"
+
+
+def test_rerun_rewrites_non_edited_but_keeps_edited_mixed(env, fake_llm_calls):
+    _, config, ctx = env
+    config["llm"] = {"provider": "fake", "answer": "свежий ответ"}
+    make_frame(ctx, "frames/f1.jpg")
+    edited_text = {"mode": "verbatim", "source_lang": "ru", "original": "x", "output": "правка", "output_lang": "ru"}
+    write_draft(ctx, [
+        episode("ep-a", "steps", 0.0, 10.0, "frames/f1.jpg"),
+        episode("ep-b", "steps", 11.0, 20.0, "frames/f1.jpg", user_edited=True, text=edited_text),
+    ])
+    write_transcript(ctx, [seg(0, 10, "текст один"), seg(11, 20, "текст два")])
+
+    storyboard, report = run_text(ctx, config)
+
+    by_id = {e["id"]: e for e in storyboard["episodes"]}
+    assert by_id["ep-a"]["text"]["output"] == "свежий ответ"  # regenerated
+    assert by_id["ep-b"]["text"]["output"] == "правка"  # kept
+    modes = {e["id"]: ("kept" if e.get("kept") else e.get("text_mode")) for e in report["episodes"]}
+    assert modes == {"ep-a": "condensed", "ep-b": "kept"}
+
+
+def test_cli_rerun_after_manual_edit_keeps_edit(env, fake_llm_calls, capsys):
+    """Сквозной сценарий наряда: правка в storyboard.json руками -> повторный razkadr text -> правка на месте."""
+    _, _, ctx = env
+    config_path = ctx.runs_dir.parent / "razkadr.toml"
+    config_path.write_text('[llm]\nprovider = "fake"\nanswer = "перегенерировано"\n', encoding="utf-8")
+    make_frame(ctx, "frames/f1.jpg")
+    write_draft(ctx, [episode("ep-steps", "steps", 0.0, 10.0, "frames/f1.jpg")])
+    write_transcript(ctx, [seg(0, 10, "текст")])
+
+    # first run produces text
+    assert main(["text", str(ctx.dir), "--config", str(config_path)]) == EXIT_OK
+    # the user edits the text in storyboard.json (as the editor would)
+    doc = _read_json(ctx, STORYBOARD_JSON)
+    doc["episodes"][0]["text"]["output"] = "своя правка"
+    doc["episodes"][0]["text"]["mode"] = "verbatim"
+    doc["episodes"][0]["user_edited"] = True
+    (ctx.dir / STORYBOARD_JSON).write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+
+    # second run: the edit stays
+    assert main(["text", str(ctx.dir), "--config", str(config_path)]) == EXIT_OK
+    doc = _read_json(ctx, STORYBOARD_JSON)
+    assert doc["episodes"][0]["text"]["output"] == "своя правка"
+    assert doc["episodes"][0]["text"]["mode"] == "verbatim"

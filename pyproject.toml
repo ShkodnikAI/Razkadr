@@ -22,6 +22,11 @@ dependencies = [
     "imagehash>=4.3",
     # index stage (naryad 010): exact cosine search in the core vector store
     "numpy>=1.26",
+    # render stage (naryad 022): fill the PPTX template with slides.json data
+    "python-pptx>=1.0",
+    # text metrics for the auto-fit font sizing (naryad 022); Pillow already
+    # arrives transitively via imagehash, declared here because render imports it
+    "pillow>=10",
 ]
 
 [project.optional-dependencies]
@@ -43,6 +48,7 @@ markers = [
     "ffmpeg: media tests that need the ffmpeg/ffprobe binaries; skipped when absent",
     "bench: micro-benchmarks run explicitly with 'pytest -m bench' (slow, numbers go into PRs)",
     "live: real-network provider tests (naryad 037); skipped unless the provider API key is set",
+    "libreoffice: PDF-conversion tests via soffice headless (naryad 022); skipped when soffice is absent",
 ]
 
 [tool.ruff]

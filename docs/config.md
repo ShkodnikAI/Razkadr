@@ -551,6 +551,41 @@ razkadr text-review runs/<id>/storyboard.json --out review.json
 - Без `soffice` (LibreOffice) в PATH пакет уходит без PDF с
   предупреждением; таймаут экспорта — `pdf_timeout_s` (№024).
 
+## Экспорт Google Slides: раздел [google] (наряд №025)
+
+Загрузка готовой деки в Google Drive с конвертацией в Google Slides
+(контракт: `deck.pptx → ссылка на Google Slides`). Команда отдельная —
+сеть и токен нужны только здесь:
+
+```bash
+export GOOGLE_OAUTH_TOKEN=<token>   # scope: https://www.googleapis.com/auth/drive.file
+razkadr export-gslides deck.pptx [--name "Мой рецепт"] [--out gslinks.json]
+```
+
+```toml
+[google]
+access_token_env = "GOOGLE_OAUTH_TOKEN"  # имя переменной с OAuth-токеном (рекомендуется)
+folder_id = "..."                        # необязательно: папка Drive для загрузки
+timeout_s = 120                          # таймаут одного HTTP-вызова
+```
+
+- Токен — OAuth access token владельца с scope `drive.file` (видит только
+  загруженные приложением файлы); refresh-флоу не реализован — владелец
+  выдаёт готовый токен. Прямой `access_token = "..."` в toml тоже
+  принимается, но не рекомендуется: значение уходит в реестр секретов и
+  маскируется, как любой ключ провайдера.
+- Протокол — resumable-загрузка Drive в два вызова (метаданные → байты
+  деки); конвертацию запрашивает mimeType
+  `application/vnd.google-apps.presentation` в метаданных. Результат —
+  `webViewLink` файла (или каноническая ссылка из file id, если Drive её
+  не вернул).
+- Ошибки — таксономия слоя провайдеров: 401/403 → AuthError (проверьте
+  токен), 429 → Quota/Transient, 5xx → TransientError; повторы — за
+  вызывающим (команда перезапускается как есть). Токен не попадает в
+  сообщения об ошибках, логи и артефакты (тесты на это есть).
+- Артефакт `--out` — JSON `{file_id, name, link}`, пишется атомарно
+  (№029); без `--out` команда печатает ссылку.
+
 ## Полный пример
 
 ```toml

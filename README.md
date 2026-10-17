@@ -77,6 +77,8 @@ runs/<run_id>/
 
 Правку Storyboard можно внести руками (`storyboard.json`) и повторить `razkadr build <видео> --resume <run_id>`: правки пользователя сохраняются, неизменённые стадии не пересчитываются, повторы не тарифицируются повторно (кэш вызовов).
 
+Готовую деку можно выложить в Google Slides с конвертацией: `razkadr export-gslides runs/<run_id>/deck.pptx --out gslinks.json` — нужен OAuth-токен владельца (scope drive.file), механика и конфиг `[google]` — в [docs/render.md](docs/render.md) и [docs/config.md](docs/config.md).
+
 Без ключей пайплайн работает на fake-провайдерах из конфига выше (детерминированные заглушки №033). Для боевых вызовов подключите своих провайдеров через BYOK — реальные секции `[asr]`/`[vlm]`/`[llm]`/`[embeddings]` и `[keys]` описаны в [docs/config.md](docs/config.md) (ключи не логируются и не попадают в артефакты).
 
 ## Демо без видео (5 минут)

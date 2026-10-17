@@ -1,0 +1,42 @@
+{
+  "metadata": {
+    "request_id": "00000000-0000-0000-0000-000000000000",
+    "duration": 5.2,
+    "channels": 1,
+    "model_info": {"name": "nova-3", "version": "2025-01", "uuid": "00000000-0000-0000-0000-000000000001"}
+  },
+  "results": {
+    "channels": [
+      {
+        "detected_language": "ru",
+        "alternatives": [
+          {
+            "transcript": "Две ложки муки в миску. Разогрейте сковороду на среднем огне.",
+            "confidence": 0.95,
+            "paragraphs": {
+              "paragraphs": [
+                {
+                  "sentences": [
+                    {"text": "Две ложки муки в миску.", "start": 0.0, "end": 2.3}
+                  ],
+                  "start": 0.0,
+                  "end": 2.3,
+                  "num_words": 5
+                },
+                {
+                  "sentences": [
+                    {"text": "Разогрейте сковороду на среднем огне.", "start": 2.7, "end": 5.1}
+                  ],
+                  "start": 2.7,
+                  "end": 5.1,
+                  "num_words": 5
+                }
+              ]
+            },
+            "words": []
+          }
+        ]
+      }
+    ]
+  }
+}

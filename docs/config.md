@@ -99,6 +99,45 @@ batch_size = 16             # входов на один вызов API (нар�
 помечается в логе как `index is stale`). Без раздела `[embeddings]` стадия
 индекса пропускается с предупреждением — конвейер остаётся рабочим.
 
+### Реальные адаптеры ASR (наряд №037, ADR-0006)
+
+В `[asr]` доступны реальные реализации: `provider = "gemini"` (по умолчанию
+по ADR-0006, модель `gemini-3.5-transcribe`) и `provider = "deepgram"`
+(запасной, модель `nova-3`). Ключ передаётся переменной окружения
+(`api_key_env`) или прямым `api_key` в локальном toml (режим BYOK, маскируется):
+
+| provider | Модель по умолчанию | Переменная ключа | Единицы учёта |
+|---|---|---|---|
+| `gemini` | `gemini-3.5-transcribe` | `GEMINI_API_KEY` | секунды аудио |
+| `deepgram` | `nova-3` | `DEEPGRAM_API_KEY` | секунды аудио |
+
+```toml
+[asr]
+provider = "gemini"            # или "deepgram"
+model = "gemini-3.5-transcribe"
+api_key_env = "GEMINI_API_KEY" # export GEMINI_API_KEY=... вне репозитория
+max_attempts = 3
+base_delay_s = 1.0
+requests_per_minute = 60
+max_concurrency = 1
+
+  [asr.tariff]
+  units = "seconds"
+  price = 0.00005              # ~$0.003/мин; источник: docs/providers.md, 2026-10-16
+  currency = "USD"
+  tariff_date = "2026-10-16"
+```
+
+Оба адаптера берут аудио частями WAV (16 кГц, моно — как готовит стадия
+transcript), ключ уходит в заголовке запроса (в URL и сообщениях ошибок его
+нет), ответ нормализуется в единый тип `Transcript` (таймкоды в секундах,
+язык — первичный тег BCP-47: «ru-RU» → «ru»). Ошибки провайдера
+отображаются в таксономию слоя: неверный ключ — `AuthError`, исчерпанная
+квота — `QuotaError`, лимит частоты и недоступность (5xx, таймаут) —
+`TransientError` (слой повторяет с экспоненциальной задержкой).
+Стоимость списывается по секундам аудио: у `deepgram` — по
+`metadata.duration` ответа провайдера, у `gemini` — по длительности WAV.
+
 ### Учёт стоимости
 
 Каждый вызов дописывает запись в `provider_calls` файла `run.json`:

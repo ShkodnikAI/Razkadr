@@ -1,0 +1,8 @@
+{
+  "candidates": [
+    {
+      "content": {"parts": [{"text": "not json at all"}]},
+      "finishReason": "STOP"
+    }
+  ]
+}

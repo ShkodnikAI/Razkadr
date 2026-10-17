@@ -7,7 +7,8 @@ naryads 005-010 glued together with cache, resume and a final summary in
 naryad 011), gallery (real, naryad 041: static HTML of the run's frames
 and selection results), select (real, naryad 014: preset + hybrid search
 -> draft Storyboard), eval (real, naryad 015: hit@k over the reference
-set), layout (real, naryad 021: Storyboard -> slides.json) and stubs for
+set), layout (real, naryad 021: Storyboard -> slides.json), render (real,
+naryad 022: slides.json -> deck.pptx on the template) and stubs for
 the remaining pipeline commands (text/build) with a unified interface
 --config/--force/--runs-dir/--resume; their logic arrives with later
 naryads.
@@ -435,6 +436,56 @@ def _cmd_export_html(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_render(args: argparse.Namespace) -> int:
+    """PPTX deck on the reference template (naryad 022). 0 = ok, 1 = invalid
+    slides document, 2 = file error (template/frames)."""
+    from razkadr.render.pptx import RenderError, render_pptx
+
+    slides_path = Path(args.slides)
+    try:
+        slides_doc = json.loads(slides_path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        print(f"razkadr render: cannot read {slides_path}: {exc.strerror or exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    except json.JSONDecodeError as exc:
+        print(f"razkadr render: invalid JSON in {slides_path}: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    from razkadr.validation import validate_document
+
+    issues = validate_document(slides_doc, kind="slides")
+    if issues:
+        print("razkadr render: slides document is invalid:", file=sys.stderr)
+        for issue in issues:
+            print(issue, file=sys.stderr)
+        return EXIT_INVALID
+    storyboard = None
+    storyboard_path = Path(args.storyboard) if args.storyboard else slides_path.with_name("storyboard.json")
+    if storyboard_path.is_file():
+        try:
+            storyboard = json.loads(storyboard_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(
+                f"razkadr render: storyboard {storyboard_path} unreadable ({exc}); notes degrade to ids",
+                file=sys.stderr,
+            )
+    out = Path(args.out)
+    try:
+        stats = render_pptx(
+            slides_doc,
+            out,
+            template=args.template,
+            storyboard=storyboard,
+            base_dir=slides_path.parent,
+            min_font_pt=args.min_font_pt,
+        )
+    except RenderError as exc:
+        print(f"razkadr render: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    suffix = f", {len(stats['warnings'])} warnings" if stats["warnings"] else ""
+    print(f"razkadr render: {out} ({stats['slides']} slides, {stats['pictures']} pictures{suffix})")
+    return EXIT_OK
+
+
 def _cmd_export_json(args: argparse.Namespace) -> int:
     """Storyboard -> canonical JSON with re-validation (naryad 026).
     0 = ok, 1 = invalid, 2 = file error."""
@@ -633,6 +684,35 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", default="storyboard.out.json", metavar="PATH", help="Output path (default: storyboard.out.json)"
     )
     p_export_json.set_defaults(func=_cmd_export_json)
+
+    p_render = sub.add_parser(
+        "render",
+        help="slides.json -> deck.pptx on the template (naryad No022)",
+    )
+    p_render.add_argument("slides", help="Path to slides.json (razkadr layout output)")
+    p_render.add_argument(
+        "--out", default="deck.pptx", metavar="PATH", help="Output PPTX path (default: deck.pptx)"
+    )
+    p_render.add_argument(
+        "--template",
+        default=None,
+        metavar="PATH",
+        help="PPTX template (default: templates/razkadr-default.pptx)",
+    )
+    p_render.add_argument(
+        "--storyboard",
+        default=None,
+        metavar="PATH",
+        help="Storyboard JSON for speaker notes (default: storyboard.json next to slides; notes degrade to ids without it)",
+    )
+    p_render.add_argument(
+        "--min-font-pt",
+        type=int,
+        default=12,
+        metavar="N",
+        help="Auto-fit floor; text that still overflows stays at N pt and warns (default: 12)",
+    )
+    p_render.set_defaults(func=_cmd_render)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://razkadr.dev/schemas/slides.v1.json",
+  "title": "Razkadr slides",
+  "description": "Layout engine output (naryad 021, ADR-0003): the Storyboard turned into slides with slots. Format-neutral: PPTX, HTML and PDF renderers build from this document. Deterministic: two runs on the same inputs produce byte-identical files.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "lang", "slides"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "Slides schema version, semver (patch may be omitted). This schema validates major version 1 only."
+    },
+    "lang": {
+      "type": "string",
+      "pattern": "^(ru|en|und)$",
+      "description": "Language of the slide captions (heading texts like 'Ingredients'); episode text is never translated here (wave 3)."
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Document-level notes: unmapped roles and other non-fatal layout decisions. Nothing is dropped silently.",
+      "items": { "$ref": "#/$defs/warning" }
+    },
+    "slides": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/slide" }
+    }
+  },
+  "$defs": {
+    "frame_slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "t", "episode_id"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "description": "Frame image path, as recorded in the Storyboard." },
+        "t": { "type": "number", "minimum": 0, "description": "Frame timestamp in seconds (from the Storyboard)." },
+        "episode_id": { "type": "string", "minLength": 1, "description": "Episode the frame comes from." }
+      }
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frame", "number", "text", "timecode"],
+      "description": "One step cell of a steps_grid slide.",
+      "properties": {
+        "frame": { "$ref": "#/$defs/frame_slot" },
+        "number": { "type": "integer", "minimum": 1, "description": "Global step number across the document, in Storyboard order." },
+        "text": { "type": "string", "description": "Step text; empty when the episode has no text." },
+        "timecode": { "type": "string", "minLength": 1, "description": "mm:ss or h:mm:ss of the episode t_start." }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "description": "Machine-readable code, e.g. text_truncated, unmapped_role." },
+        "episode_id": { "type": "string", "description": "Episode the warning is about (when applicable)." },
+        "slot": { "type": "string", "description": "Slot the text was truncated in (when applicable)." },
+        "limit": { "type": "integer", "minimum": 1, "description": "Length limit that triggered the truncation." },
+        "detail": { "type": "string", "description": "Human-readable note." }
+      }
+    },
+    "slide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layout", "slots", "source_refs", "warnings"],
+      "properties": {
+        "layout": {
+          "enum": ["title", "hero_caption", "ingredients_list", "steps_grid", "serving"],
+          "description": "Layout name; the set of layouts is fixed by the engine, the role-to-layout mapping is configuration (naryad 021)."
+        },
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Episode ids that feed this slide (continuation slides repeat the episode id)."
+        },
+        "warnings": { "type": "array", "items": { "$ref": "#/$defs/warning" } },
+        "slots": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Slot values; which slots are present depends on the layout (see docs/layout.md). Slot keys are the union over layouts; the engine fills only the slots of its layout.",
+          "properties": {
+            "heading": { "type": "string", "description": "Title heading (project title) or list heading ('Ingredients')." },
+            "subheading": { "type": "string", "description": "Title subheading (hero text)." },
+            "frame": { "$ref": "#/$defs/frame_slot" },
+            "caption": { "type": "string", "description": "hero_caption/serving caption (episode text)." },
+            "timecode": { "type": "string", "description": "mm:ss or h:mm:ss of the episode t_start." },
+            "items": { "type": "array", "items": { "type": "string" }, "description": "ingredients_list rows (split of the episode text)." },
+            "cells": { "type": "array", "items": { "$ref": "#/$defs/cell" }, "description": "steps_grid cells in document order." },
+            "columns": { "type": "integer", "enum": [2, 3], "description": "steps_grid: 2 means a 2x2 grid, 3 means three columns." }
+          }
+        }
+      }
+    }
+  }
+}

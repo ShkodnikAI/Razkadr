@@ -8,7 +8,8 @@ naryad 011), gallery (real, naryad 041: static HTML of the run's frames
 and selection results), select (real, naryad 014: preset + hybrid search
 -> draft Storyboard), eval (real, naryad 015: hit@k over the reference
 set), layout (real, naryad 021: Storyboard -> slides.json), render (real,
-naryad 022: slides.json -> deck.pptx on the template) and stubs for
+naryad 022: slides.json -> deck.pptx on the template), export-pdf (real,
+naryad 024: deck.pptx -> deck.pdf via LibreOffice headless) and stubs for
 the remaining pipeline commands (text/build) with a unified interface
 --config/--force/--runs-dir/--resume; their logic arrives with later
 naryads.
@@ -486,6 +487,34 @@ def _cmd_render(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_export_pdf(args: argparse.Namespace) -> int:
+    """Deck PDF via LibreOffice headless (naryad 024). 0 = ok, 1 = export
+    failure (no soffice / timeout / empty result), 2 = input unreadable."""
+    from razkadr.config import load_config
+    from razkadr.render.pdf import PdfExportError, export_pdf, missing_fonts
+
+    deck = Path(args.deck)
+    if not deck.is_file():
+        print(f"razkadr export-pdf: cannot read {deck}: not a file", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    config = load_config(args.config)
+    timeout_s = int(config.get("pdf_timeout_s", 120))
+    out = Path(args.out) if args.out else deck.with_suffix(".pdf")
+    try:
+        export_pdf(deck, out, timeout_s=timeout_s)
+    except PdfExportError as exc:
+        print(f"razkadr export-pdf: {exc}", file=sys.stderr)
+        return EXIT_INVALID
+    for face in sorted(missing_fonts(deck)):
+        print(
+            f"razkadr export-pdf: font not found in system: {face} "
+            "(the PDF will use a substitute; install the font for the intended look)",
+            file=sys.stderr,
+        )
+    print(f"razkadr export-pdf: {out}")
+    return EXIT_OK
+
+
 def _cmd_export_json(args: argparse.Namespace) -> int:
     """Storyboard -> canonical JSON with re-validation (naryad 026).
     0 = ok, 1 = invalid, 2 = file error."""
@@ -713,6 +742,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Auto-fit floor; text that still overflows stays at N pt and warns (default: 12)",
     )
     p_render.set_defaults(func=_cmd_render)
+
+    p_export_pdf = sub.add_parser(
+        "export-pdf",
+        help="Deck PDF from PPTX via LibreOffice headless (naryad No024)",
+    )
+    p_export_pdf.add_argument("deck", help="Path to deck.pptx (razkadr render output)")
+    p_export_pdf.add_argument(
+        "--out", default=None, metavar="PATH", help="Output PDF path (default: <deck>.pdf next to it)"
+    )
+    p_export_pdf.add_argument(
+        "--config", default=None, help="Path to razkadr.toml (pdf_timeout_s, default 120)"
+    )
+    p_export_pdf.set_defaults(func=_cmd_export_pdf)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

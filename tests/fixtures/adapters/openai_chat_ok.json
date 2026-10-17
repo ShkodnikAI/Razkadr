@@ -1,0 +1,13 @@
+{
+  "id": "chatcmpl-0000000000000000000000",
+  "object": "chat.completion",
+  "model": "gpt-6-luna",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"role": "assistant", "content": "{\"boundaries\": [0, 2, 5]}"},
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {"prompt_tokens": 210, "completion_tokens": 12, "total_tokens": 222}
+}

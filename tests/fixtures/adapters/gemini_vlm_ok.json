@@ -1,0 +1,9 @@
+{
+  "candidates": [
+    {
+      "content": {"parts": [{"text": "Ингредиенты: 2 яйца\nСоль по вкусу"}]},
+      "finishReason": "STOP"
+    }
+  ],
+  "usageMetadata": {"promptTokenCount": 320, "candidatesTokenCount": 18, "totalTokenCount": 338}
+}

@@ -73,6 +73,7 @@ TRANSCRIPT_JSON = "transcript.json"
 
 PROMPT_CONDENSE = "condense.v1.md"
 PROMPT_DESCRIBE = "describe.v1.md"
+PROMPT_TRANSLATE = "translate_episode.v1.md"
 PROMPT_MAX_CHARS_PLACEHOLDER = "{{max_chars}}"
 PROMPT_LANG_PLACEHOLDER = "{{lang}}"
 
@@ -82,11 +83,19 @@ TIME_EPS = 1e-9
 ELLIPSIS = "…"
 NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
 ANSWER_EDGES_RE = re.compile(r"^[\s\"'«»“”»]+|[\s\"'«»“”»]+$")
+# unit normalization (naryad 018): applied to the source text BEFORE the
+# provider step, so the number invariant compares against normalized original
+FAHRENHEIT_RE = re.compile(r"(\d+(?:[.,]\d+)?)\s*[°º]\s*[Ff]\b")
+CUP_RE = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*cups?\b", re.IGNORECASE)
 
 # [text] defaults: mode = auto (speech -> condensed, silent -> described);
 # role_limits mirror the layout engine defaults (naryad 021): hero is the
 # hero_caption subheading, ingredients is 12 list items x 40 chars, prep and
 # steps are the steps_grid cell, serving is a caption.
+# output_lang = "" -> project.output_lang (naryad 018): when it differs from
+# the episode's source_lang the output is translated through [llm].
+# units: unit normalization is off by default - numbers must not change
+# without an explicit owner decision (naryad 018 "по настройке").
 DEFAULT_ROLE_LIMITS: dict[str, int] = {
     "hero": 120,
     "ingredients": 480,
@@ -99,6 +108,12 @@ TEXT_DEFAULTS: dict = {
     "mode": "auto",
     "role_limits": {},
     "default_limit": 180,
+    "output_lang": "",
+    "units": {},
+}
+UNIT_DEFAULTS: dict = {
+    "fahrenheit_to_celsius": False,  # 350 °F -> 177 °C (arithmetic, rounded)
+    "cup_to_ml": 0,                  # 1 cup -> N ml (US cup ~ 240 ml); 0 = off
 }
 
 
@@ -120,7 +135,19 @@ def text_params(config: dict) -> dict:
         if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
             raise TextError(f"[text] role_limits.{role} must be a positive integer, got {limit!r}")
         role_limits[str(role)] = int(limit)
-    return {"mode": mode, "role_limits": role_limits, "default_limit": default_limit}
+    output_lang = str(section.get("output_lang") or "").strip()
+    units_section = {**UNIT_DEFAULTS, **(section.get("units") or {})}
+    f_to_c = bool(units_section["fahrenheit_to_celsius"])
+    cup_ml = int(units_section["cup_to_ml"])
+    if cup_ml < 0:
+        raise TextError(f"[text] units.cup_to_ml must be >= 0, got {cup_ml}")
+    return {
+        "mode": mode,
+        "role_limits": role_limits,
+        "default_limit": default_limit,
+        "output_lang": output_lang,
+        "units": {"fahrenheit_to_celsius": f_to_c, "cup_to_ml": cup_ml},
+    }
 
 
 def load_prompt(name: str) -> str:
@@ -140,6 +167,41 @@ def describe_system_prompt(max_chars: int, lang: str) -> str:
         .replace(PROMPT_MAX_CHARS_PLACEHOLDER, str(max_chars))
         .replace(PROMPT_LANG_PLACEHOLDER, lang)
     )
+
+
+def translate_system_prompt(lang: str) -> str:
+    """Prompt translate_episode.v1 with the target language substituted."""
+    return load_prompt(PROMPT_TRANSLATE).replace(PROMPT_LANG_PLACEHOLDER, lang)
+
+
+def normalize_units(text: str, units: dict) -> tuple[str, list[str]]:
+    """Deterministic unit normalization of the source text (naryad 018).
+
+    Applied BEFORE the provider step: the LLM then receives already
+    normalized text, the number invariant compares against the normalized
+    original, and no provider can silently misconvert. Off by default -
+    numbers must not change without an explicit owner decision. Returns
+    (text, applied conversions) with human-readable records for the report.
+    """
+    applied: list[str] = []
+
+    def _f_to_c(match: re.Match) -> str:
+        f_value = float(match.group(1).replace(",", "."))
+        c_value = round((f_value - 32.0) * 5.0 / 9.0)
+        applied.append(f"{match.group(0).strip()} -> {c_value:g} °C")
+        return f"{c_value:g} °C"
+
+    def _cup_to_ml(match: re.Match) -> str:
+        cups = float(match.group(1).replace(",", "."))
+        ml = cups * units["cup_to_ml"]
+        applied.append(f"{match.group(0).strip()} -> {ml:g} мл")
+        return f"{ml:g} мл"
+
+    if units.get("fahrenheit_to_celsius"):
+        text = FAHRENHEIT_RE.sub(_f_to_c, text)
+    if int(units.get("cup_to_ml") or 0) > 0:
+        text = CUP_RE.sub(_cup_to_ml, text)
+    return text, applied
 
 
 def segments_in_span(segments: list[dict], t_start: float, t_end: float) -> list[dict]:
@@ -230,18 +292,22 @@ def _build_text_block(
     source_lang: str | None,
     output_lang: str | None,
 ) -> dict:
-    """Episode text dict per the storyboard schema (naryad 002); empty fields omitted."""
+    """Episode text dict per the storyboard schema (naryad 002); empty fields omitted.
+
+    ``output_lang`` carries the language of ``output``: the source language
+    by default, the target language after a successful translation (naryad
+    018), the project language for described mode.
+    """
     block: dict = {"mode": mode}
     if source_lang:
         block["source_lang"] = source_lang
-        block["output_lang"] = source_lang
     if mode == "described":
         block["original"] = ""
-        out_lang = output_lang or source_lang
-        if out_lang:
-            block["output_lang"] = out_lang
     else:
         block["original"] = original
+    out_lang = output_lang or source_lang
+    if out_lang:
+        block["output_lang"] = out_lang
     block["output"] = output
     return block
 
@@ -284,20 +350,25 @@ def run_text(ctx: RunContext, config: dict) -> tuple[dict, dict]:
     llm_section = config.get("llm") or {}
     vlm_section = config.get("vlm") or {}
 
-    # services are built lazily: a run whose episodes never need the LLM/VLM
-    # must not construct the provider (and must not trip resolve_key on an
-    # api_key_env that is set but empty)
-    def llm_service():
-        try:
-            return ProviderLayer(config, ctx).llm(stage="text")
-        except ProviderConfigError as exc:
-            raise TextError(f"{exc} (the [llm] section is configured; see docs/config.md)") from None
+    # services are built lazily and memoized: a run whose episodes never
+    # need the LLM/VLM must not construct the provider (and must not trip
+    # resolve_key on an api_key_env that is set but empty), and episodes
+    # that do must share one service (one call cache, one accounting stream)
+    def make_service(section_name: str, task: str, stage: str):
+        holder: dict = {"service": None}
 
-    def vlm_service():
-        try:
-            return ProviderLayer(config, ctx).vlm(stage="text")
-        except ProviderConfigError as exc:
-            raise TextError(f"{exc} (the [vlm] section is configured; see docs/config.md)") from None
+        def get():
+            if holder["service"] is None:
+                try:
+                    holder["service"] = ProviderLayer(config, ctx)._service(task, stage)
+                except ProviderConfigError as exc:
+                    raise TextError(f"{exc} (the [{section_name}] section is configured; see docs/config.md)") from None
+            return holder["service"]
+
+        return get
+
+    llm_service = make_service("llm", "llm", "text")
+    vlm_service = make_service("vlm", "vlm", "text")
 
     has_llm = bool(llm_section.get("provider"))
     has_vlm = bool(vlm_section.get("provider"))
@@ -427,6 +498,16 @@ def _episode_text(
     source_lang = dominant_lang(span_segments)
     entry["chars"] = {"original": len(original)}
 
+    # unit normalization (naryad 018) runs BEFORE any provider call: the
+    # provider sees already-converted numbers, the number invariant compares
+    # against the normalized original, conversions land in the report.
+    original, unit_ops = normalize_units(original, params["units"])
+    if unit_ops:
+        entry["units_converted"] = unit_ops
+
+    target_lang = params["output_lang"] or output_lang_project or ""
+    needs_translation = bool(target_lang and source_lang and target_lang != source_lang)
+
     if wanted_mode == "verbatim":
         output = normalize_answer(original)
         entry.update({"text_mode": "verbatim", "chars": {"original": len(original), "output": len(output)}})
@@ -473,7 +554,36 @@ def _episode_text(
                 {"episode_id": episode_id, "code": "numbers_lost",
                  "detail": "output does not carry every number of the original; gateway D will review"}
             )
+
+    # translation (naryad 018): when the target output language differs from
+    # the source language, the provider-translated output replaces the text;
+    # a translation that loses numbers or comes back empty falls back to the
+    # source-language text with a warning (the mode itself never changes:
+    # verbatim/condensed describe how the text was derived, not its language).
+    output_lang_used = source_lang
+    if needs_translation:
+        if llm is None:
+            warnings.append(
+                {"episode_id": episode_id, "code": "translate_no_llm",
+                 "detail": f"output language {target_lang} differs from {source_lang}, but no [llm] provider is configured"}
+            )
+        else:
+            translated = normalize_answer(llm().complete([
+                Message(role="system", content=translate_system_prompt(target_lang)),
+                Message(role="user", content=output),
+            ]))
+            if translated and numbers_preserved(output, translated):
+                output = translated
+                entry["chars"]["output"] = len(output)
+                output_lang_used = target_lang
+                entry["translated_to"] = target_lang
+            else:
+                warnings.append(
+                    {"episode_id": episode_id, "code": "translate_fallback_source",
+                     "detail": "translation lost numbers of the text" if translated else "translation came back empty"}
+                )
+
     episode["text"] = _build_text_block(
-        entry["text_mode"], original, output, source_lang, source_lang
+        entry["text_mode"], original, output, source_lang, output_lang_used
     )
     return entry

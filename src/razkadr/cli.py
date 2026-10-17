@@ -105,6 +105,38 @@ def _fmt_amount(amount: float) -> str:
     return f"{amount:.6f}".rstrip("0").rstrip(".")
 
 
+def _index_pipeline(ctx, config: dict, input_path: str) -> dict:
+    """The index stages in order (naryads 005-011): ingest, frames,
+    transcript, chunks, ocr, embeddings index. Each stage runs through the
+    RunContext cache (ok/cached, resume-safe); stage and provider errors
+    propagate to the caller. Returns the stage documents for the command
+    summaries - the shape is shared by ``razkadr index`` (naryad 011) and
+    ``razkadr build`` (naryad 028).
+    """
+    from razkadr.stages.chunks import run_chunks
+    from razkadr.stages.frames import run_frames
+    from razkadr.stages.index import run_index
+    from razkadr.stages.ingest import run_ingest
+    from razkadr.stages.ocr import run_ocr
+    from razkadr.stages.transcript import run_transcript
+
+    source = run_ingest(ctx, input_path, config)
+    frames_doc = run_frames(ctx, config)
+    transcript_doc = run_transcript(ctx, config)
+    chunks_doc = run_chunks(ctx, config)
+    ocr_doc = run_ocr(ctx, config)
+    manifest, space_counts = run_index(ctx, config)
+    return {
+        "source": source,
+        "frames_doc": frames_doc,
+        "transcript_doc": transcript_doc,
+        "chunks_doc": chunks_doc,
+        "ocr_doc": ocr_doc,
+        "manifest": manifest,
+        "space_counts": space_counts,
+    }
+
+
 def _cmd_index(args: argparse.Namespace) -> int:
     """The indexing pipeline (naryad 011): ingest (005), frames (006),
     transcript (007), chunks (008), ocr (009), embeddings index (010).
@@ -120,12 +152,12 @@ def _cmd_index(args: argparse.Namespace) -> int:
     from razkadr.config import load_config
     from razkadr.providers.base import ProviderError
     from razkadr.runctx import RunContext
-    from razkadr.stages.chunks import ChunksError, run_chunks
-    from razkadr.stages.frames import FramesError, run_frames
-    from razkadr.stages.index import IndexStageError, run_index
-    from razkadr.stages.ingest import IngestError, run_ingest
-    from razkadr.stages.ocr import OcrError, ocr_params, plan_ocr_candidates, run_ocr
-    from razkadr.stages.transcript import TranscriptError, run_transcript
+    from razkadr.stages.chunks import ChunksError
+    from razkadr.stages.frames import FramesError
+    from razkadr.stages.index import IndexStageError
+    from razkadr.stages.ingest import IngestError
+    from razkadr.stages.ocr import OcrError, ocr_params, plan_ocr_candidates
+    from razkadr.stages.transcript import TranscriptError
 
     config = load_config(args.config)
     runs_dir = args.runs_dir or config.get("runs_dir", "runs")
@@ -137,12 +169,7 @@ def _cmd_index(args: argparse.Namespace) -> int:
         return EXIT_FILE_ERROR
     ctx = RunContext(runs_dir, run_id=args.resume, config=config, force=args.force)
     try:
-        source = run_ingest(ctx, args.input, config)
-        frames_doc = run_frames(ctx, config)
-        transcript_doc = run_transcript(ctx, config)
-        chunks_doc = run_chunks(ctx, config)
-        ocr_doc = run_ocr(ctx, config)
-        manifest, space_counts = run_index(ctx, config)
+        results = _index_pipeline(ctx, config, args.input)
     except (IngestError, FramesError, TranscriptError, ChunksError, OcrError, IndexStageError, ProviderError) as exc:
         print(f"razkadr index: {exc}", file=sys.stderr)
         last = ctx.stages[-1] if ctx.stages else None
@@ -150,6 +177,13 @@ def _cmd_index(args: argparse.Namespace) -> int:
             print(f"  run {ctx.run_id} stopped at stage '{last['name']}'", file=sys.stderr)
             print(f"  resume: razkadr index {args.input} --resume {ctx.run_id}", file=sys.stderr)
         return EXIT_FILE_ERROR
+    source = results["source"]
+    frames_doc = results["frames_doc"]
+    transcript_doc = results["transcript_doc"]
+    chunks_doc = results["chunks_doc"]
+    ocr_doc = results["ocr_doc"]
+    manifest = results["manifest"]
+    space_counts = results["space_counts"]
     has_audio = (ctx.dir / "audio.wav").is_file()
     audio = "audio.wav" if has_audio else "none (source has no audio track)"
     frames = frames_doc["frames"]

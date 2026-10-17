@@ -6,14 +6,14 @@ pipeline: ingest + frames + transcript + chunks + ocr + embeddings index,
 naryads 005-010 glued together with cache, resume and a final summary in
 naryad 011), gallery (real, naryad 041: static HTML of the run's frames
 and selection results), select (real, naryad 014: preset + hybrid search
--> draft Storyboard), eval (real, naryad 015: hit@k over the reference
-set), layout (real, naryad 021: Storyboard -> slides.json), render (real,
+-> draft Storyboard), text (real, naryad 017/018: episode text into the
+Storyboard), eval (real, naryad 015: hit@k over the reference set),
+layout (real, naryad 021: Storyboard -> slides.json), render (real,
 naryad 022: slides.json -> deck.pptx on the template), export-pdf (real,
 naryad 024: deck.pptx -> deck.pdf via LibreOffice headless), template-check
-(real, naryad 023: user template report per the naming convention) and stubs for
-the remaining pipeline commands (text/build) with a unified interface
---config/--force/--runs-dir/--resume; their logic arrives with later
-naryads.
+(real, naryad 023: user template report per the naming convention) and
+build (real, naryad 028: the end-to-end run - a video in, the result
+package deck.pptx + deck.pdf + deck.html + storyboard.json out).
 Exit codes: 0 ok, 1 invalid document, 2 file/IO error, 3 command not
 implemented.
 """
@@ -30,10 +30,9 @@ EXIT_INVALID = 1
 EXIT_FILE_ERROR = 2
 EXIT_NOT_IMPLEMENTED = 3
 
-# stub command -> owning naryad (shown in help and stub message)
-STUB_COMMANDS = {
-    "build": "028",
-}
+# stub command -> owning naryad (shown in help and stub message);
+# every pipeline command is real today, the mechanism stays for the future ones
+STUB_COMMANDS: dict[str, str] = {}
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
@@ -243,6 +242,224 @@ def _cmd_index(args: argparse.Namespace) -> int:
     if cost["calls"]:
         print(
             f"  cost:       {_fmt_amount(cost['amount'])} {cost['currency']} "
+            f"({cost['calls']} calls, {cost['cache_hits']} cache hits)"
+        )
+    else:
+        print("  cost:       0 (no provider calls)")
+    times = summary["stage_times_s"]
+    print("  time:       " + ", ".join(f"{name} {times[name]:g}s" for name in times))
+    print(f"  dir:        {ctx.dir}")
+    return EXIT_OK
+
+
+def _resolve_preset(value: str) -> Path:
+    """--preset accepts a preset name (presets/<name>.yaml, resolved from
+    the current directory, i.e. the repo root) or an explicit YAML path."""
+    path = Path(value)
+    if path.suffix in (".yaml", ".yml") or "/" in value or "\\" in value:
+        return path
+    return Path("presets") / f"{value}.yaml"
+
+
+def _cmd_build(args: argparse.Namespace) -> int:
+    """The end-to-end run (naryad 028): a video in, the result package out
+    (deck.pptx, deck.pdf, deck.html, storyboard.json). The package lands in
+    the run directory (--out-dir moves the deck files elsewhere). The index
+    stages reuse the naryad 011 pipeline (cache, --resume); select (014)
+    and text (017/018) re-run idempotently (user_edited episodes survive,
+    provider calls are served from the call cache); layout (021), render
+    (022), html (026) and pdf (024) run as cached stages keyed by content
+    fingerprints. --lang sets the output language for captions and episode
+    text; without LibreOffice (soffice) the PDF drops out of the package
+    with a warning. 0 = ok, 1 = invalid storyboard, 2 = stage/IO/provider
+    error.
+    """
+    import shutil
+
+    from razkadr.config import load_config
+    from razkadr.presets import PresetError
+    from razkadr.providers.base import ProviderError
+    from razkadr.providers.layer import ProviderLayer
+    from razkadr.render.html import ExportError, export_html
+    from razkadr.render.pdf import PdfExportError, export_pdf
+    from razkadr.render.pptx import RenderError, render_pptx
+    from razkadr.runctx import RunContext, file_sha256, fingerprint
+    from razkadr.stages.chunks import ChunksError
+    from razkadr.stages.frames import FramesError
+    from razkadr.stages.index import IndexStageError
+    from razkadr.stages.ingest import IngestError
+    from razkadr.stages.layout import LayoutError, layout_storyboard, write_slides
+    from razkadr.stages.ocr import OcrError
+    from razkadr.stages.select import SelectError, run_select
+    from razkadr.stages.text import TextError, run_text
+    from razkadr.stages.transcript import TranscriptError
+    from razkadr.validation import validate_document
+
+    preset_path = _resolve_preset(args.preset)
+    if not preset_path.is_file():
+        print(
+            f"razkadr build: preset not found: {preset_path} "
+            "(pass a preset name, e.g. --preset recipe, from the repo root, or a YAML path)",
+            file=sys.stderr,
+        )
+        return EXIT_FILE_ERROR
+    config = load_config(args.config)
+    if args.lang:
+        config["text"] = {**(config.get("text") or {}), "output_lang": args.lang}
+    if args.mode:
+        config["text"] = {**(config.get("text") or {}), "mode": args.mode}
+    runs_dir = args.runs_dir or config.get("runs_dir", "runs")
+    if args.resume and not (Path(runs_dir) / args.resume / "run.json").is_file():
+        print(
+            f"razkadr build: nothing to resume: {runs_dir}/{args.resume} has no run.json",
+            file=sys.stderr,
+        )
+        return EXIT_FILE_ERROR
+    ctx = RunContext(runs_dir, run_id=args.resume, config=config, force=args.force)
+    out_dir = Path(args.out_dir) if args.out_dir else ctx.dir
+    n_before = len(ctx.stages)
+    stage_errors = (
+        IngestError, FramesError, TranscriptError, ChunksError, OcrError, IndexStageError,
+        SelectError, PresetError, TextError, LayoutError, RenderError, ExportError,
+        PdfExportError, ProviderError,
+    )
+    try:
+        results = _index_pipeline(ctx, config, args.input)
+
+        # select (naryad 014): the draft Storyboard; user edits survive re-selection
+        layer = ProviderLayer(config, ctx)
+        embeddings = layer.embeddings(stage="select")
+        llm = layer.llm(stage="select") if (config.get("llm") or {}).get("provider") else None
+        storyboard, select_report = run_select(
+            ctx.dir, preset_path, config, embeddings=embeddings, llm=llm
+        )
+        if args.lang:
+            storyboard["project"]["output_lang"] = args.lang
+        (ctx.dir / "storyboard.json").write_text(
+            json.dumps(storyboard, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        (ctx.dir / "select.json").write_text(
+            json.dumps(select_report, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+        # text (naryad 017/018): fills episodes[].text; rewrites storyboard.json
+        _storyboard, text_report = run_text(ctx, config)
+        storyboard = json.loads((ctx.dir / "storyboard.json").read_text(encoding="utf-8"))
+        issues = validate_document(storyboard, "storyboard")
+        if issues:
+            print("razkadr build: the storyboard after text is invalid:", file=sys.stderr)
+            for issue in issues[:5]:
+                print(f"  - {issue.path}: {issue.reason}", file=sys.stderr)
+            return EXIT_INVALID
+
+        # layout (naryad 021) as a cached stage keyed by the storyboard content
+        slides_path = ctx.dir / "slides.json"
+        with ctx.stage(
+            "layout",
+            inputs={"storyboard": fingerprint(storyboard)},
+            params={"lang": args.lang or ""},
+        ) as st:
+            if not st.cached or not slides_path.is_file():
+                write_slides(layout_storyboard(storyboard, config, lang=args.lang), slides_path)
+        slides = json.loads(slides_path.read_text(encoding="utf-8"))
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+        deck_path = out_dir / "deck.pptx"
+        # render (naryad 022) keyed by the slides content + the template bytes
+        template_default = Path("templates/razkadr-default.pptx")
+        template_sha = file_sha256(template_default) if template_default.is_file() else ""
+        with ctx.stage(
+            "render",
+            inputs={"slides": fingerprint(slides), "template": template_sha},
+            params={"min_font_pt": 12},
+        ) as st:
+            if not st.cached or not deck_path.is_file():
+                render_pptx(slides, deck_path, storyboard=storyboard, base_dir=ctx.dir)
+
+        # html (naryad 026) keyed by the slides + storyboard content
+        html_path = out_dir / "deck.html"
+        with ctx.stage(
+            "html",
+            inputs={"slides": fingerprint(slides), "storyboard": fingerprint(storyboard)},
+        ) as st:
+            if not st.cached or not html_path.is_file():
+                export_html(slides, html_path, storyboard=storyboard, base_dir=ctx.dir)
+
+        # pdf (naryad 024) keyed by the deck bytes; LibreOffice is optional
+        pdf_path = out_dir / "deck.pdf"
+        pdf_skipped = ""
+        if shutil.which("soffice") is None:
+            pdf_skipped = "pdf skipped: soffice (LibreOffice) not in PATH"
+        else:
+            timeout_s = int(config.get("pdf_timeout_s", 120))
+            with ctx.stage(
+                "pdf",
+                inputs={"deck": file_sha256(deck_path) if deck_path.is_file() else "missing"},
+                params={"timeout_s": timeout_s},
+            ) as st:
+                if not st.cached or not pdf_path.is_file():
+                    export_pdf(deck_path, pdf_path, timeout_s=timeout_s)
+
+        # the json artifact of the package: the validated Storyboard itself
+        json_path = out_dir / "storyboard.json"
+        if json_path != ctx.dir / "storyboard.json":
+            json_path.write_text(
+                json.dumps(storyboard, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+    except stage_errors as exc:
+        print(f"razkadr build: {exc}", file=sys.stderr)
+        last = ctx.stages[-1] if ctx.stages else None
+        if last and last.get("status") == "failed":
+            print(f"  run {ctx.run_id} stopped at stage '{last['name']}'", file=sys.stderr)
+            print(f"  resume: razkadr build {args.input} --resume {ctx.run_id}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+
+    # console summary: the stage line of this invocation, then the package
+    recent = ctx.stages[n_before:]
+    parts = [f"{entry['name']} {entry['status']}" for entry in recent]
+    # select/text keep no stage-cache entries (naryad 014/017 semantics):
+    # report them right after the index stage they follow
+    index_pos = next((i for i, entry in enumerate(recent) if entry["name"] == "index"), None)
+    if index_pos is not None:
+        parts.insert(index_pos + 1, "select ok, text ok")
+    if pdf_skipped:
+        print(f"razkadr build: warning: {pdf_skipped}", file=sys.stderr)
+    for warning in select_report.get("warnings") or []:
+        print(f"  warning: {warning}", file=sys.stderr)
+    for warning in text_report.get("warnings") or []:
+        print(
+            f"  warning: {warning.get('episode_id', '?')}: {warning.get('code')} — {warning.get('detail', '')}",
+            file=sys.stderr,
+        )
+    print(f"run {ctx.run_id}: " + ", ".join(parts))
+    source = results["source"]
+    print(
+        f"  video:      {source['width']}x{source['height']} @ {source['fps']:g} fps, {source['duration_s']:g} s"
+    )
+    roles: dict[str, int] = {}
+    for ep in storyboard["episodes"]:
+        roles[ep["role"]] = roles.get(ep["role"], 0) + 1
+    role_line = ", ".join(f"{role} {n}" for role, n in roles.items()) or "no episodes"
+    warnings_total = sum(len(s.get("warnings") or []) for s in slides["slides"]) + len(slides.get("warnings") or [])
+    print(
+        f"  storyboard: {len(storyboard['episodes'])} episodes ({role_line}), "
+        f"{len(slides['slides'])} slides, {warnings_total} warning(s)"
+    )
+    print(f"  package:    {out_dir}")
+    for label, path in (("pptx", deck_path), ("pdf", pdf_path), ("html", html_path), ("json", json_path)):
+        print(f"    {label:<5} {path if path.is_file() else '- (skipped)'}")
+    summary = ctx.write_summary(
+        artifacts={
+            "episodes": len(storyboard["episodes"]),
+            "slides": len(slides["slides"]),
+            "warnings": warnings_total,
+            "package_files": sum(1 for p in (deck_path, pdf_path, html_path, json_path) if p.is_file()),
+        }
+    )
+    cost = summary["provider_cost"]
+    if cost["calls"]:
+        print(
+            f"  cost:       {_fmt_amount(cost['amount'])} {cost.get('currency', '')} "
             f"({cost['calls']} calls, {cost['cache_hits']} cache hits)"
         )
     else:
@@ -942,6 +1159,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write the JSON report to PATH (default: print the summary only)",
     )
     p_review.set_defaults(func=_cmd_text_review)
+
+    p_build = sub.add_parser(
+        "build",
+        help="Video -> the result package: deck.pptx, deck.pdf, deck.html, storyboard.json (naryad No028)",
+    )
+    p_build.add_argument("input", help="Path to a video file, or a URL for yt-dlp")
+    p_build.add_argument(
+        "--preset",
+        default="recipe",
+        help="Preset name (presets/<name>.yaml, resolved from the current directory) or a YAML path (default: recipe)",
+    )
+    p_build.add_argument(
+        "--lang",
+        choices=("ru", "en"),
+        default=None,
+        help="Output language for captions and episode text (default: [text] output_lang, else the video language)",
+    )
+    p_build.add_argument(
+        "--mode",
+        choices=("auto", "verbatim", "condensed", "described"),
+        default=None,
+        help="Episode text mode (default: [text] mode, else auto)",
+    )
+    p_build.add_argument(
+        "--out-dir",
+        default=None,
+        metavar="PATH",
+        help="Directory for the result package (default: the run directory)",
+    )
+    _add_common_args(p_build)
+    p_build.set_defaults(func=_cmd_build)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

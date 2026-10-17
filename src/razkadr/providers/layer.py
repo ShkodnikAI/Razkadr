@@ -37,7 +37,9 @@ from razkadr.providers.base import (
     TransientError,
 )
 from razkadr.providers.cache import CallCache, call_key
+from razkadr.providers.deepgram import DeepgramASR
 from razkadr.providers.fakes import FakeASR, FakeEmbeddings, FakeLLM, FakeVLM
+from razkadr.providers.gemini import GeminiASR
 from razkadr.providers.tariffs import tariff_from_config
 from razkadr.providers.types import Message, Transcript, Vector
 from razkadr.runctx import RunContext, file_sha256
@@ -265,6 +267,13 @@ FACTORIES: dict[str, dict[str, Callable[[dict], object]]] = {
     "asr": {
         "fake": lambda s: FakeASR(model=s.get("model", "fake-nova-2"), lang=s.get("lang", "ru")),
         "fake-alt": lambda s: FakeASR(name="fake-alt", model=s.get("model", "fake-nova-alt")),
+        # real adapters (naryad 037, ADR-0006): default + fallback
+        "gemini": lambda s: GeminiASR(
+            model=s.get("model", "gemini-3.5-transcribe"), api_key=resolve_key(s, "asr") or ""
+        ),
+        "deepgram": lambda s: DeepgramASR(
+            model=s.get("model", "nova-3"), api_key=resolve_key(s, "asr") or ""
+        ),
     },
     "embed": {
         "fake": lambda s: FakeEmbeddings(model=s.get("model", "fake-embed-v2"), dim=int(s.get("dim", 8))),

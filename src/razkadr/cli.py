@@ -562,6 +562,49 @@ def _cmd_export_pdf(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_text_review(args: argparse.Namespace) -> int:
+    """Fact checklist and comparison tool (naryad 020): for every episode with
+    text, compare text.original with text.output - numbers, temperatures,
+    times, measures (multiset diff) plus ingredient candidates for human
+    review. Deterministic, no providers. 0 = all reviewable episodes ok,
+    1 = there is something to review (fail or review), 2 = file error."""
+    from razkadr.review import ReviewError, review_file
+
+    try:
+        report, _ = review_file(args.storyboard)
+    except ReviewError as exc:
+        print(f"razkadr text-review: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    summary = report["summary"]
+    print(
+        f"text-review: {summary['reviewable']}/{summary['episodes']} episodes reviewable: "
+        f"ok {summary['ok']}, review {summary['review']}, fail {summary['fail']}"
+    )
+    for entry in report["episodes"]:
+        if entry["status"] == "n/a":
+            print(f"  {entry['id']} ({entry.get('mode') or '-'}): n/a - {entry['reason']}")
+            continue
+        lost = {name: facts["lost"] for name, facts in entry["facts"].items() if facts["lost"]}
+        added = {name: facts["added"] for name, facts in entry["facts"].items() if facts["added"]}
+        line = f"  {entry['id']} ({entry['role']}, {entry['mode']}): {entry['status']}"
+        print(line)
+        if lost:
+            print(f"    lost:   {json.dumps(lost, ensure_ascii=False)}")
+        if added:
+            print(f"    added:  {json.dumps(added, ensure_ascii=False)}")
+        if entry["ingredient_candidates"]:
+            print(f"    check words: {', '.join(entry['ingredient_candidates'])}")
+    if args.out:
+        out = Path(args.out)
+        try:
+            out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        except OSError as exc:
+            print(f"razkadr text-review: cannot write report: {exc}", file=sys.stderr)
+            return EXIT_FILE_ERROR
+        print(f"  report: {out}")
+    return EXIT_OK if summary["fail"] == 0 and summary["review"] == 0 else EXIT_INVALID
+
+
 def _cmd_template_check(args: argparse.Namespace) -> int:
     """User template report (naryad 023). 0 = renderable, 1 = something is
     missing (the report lists what), 2 = the file is not a PPTX."""
@@ -852,6 +895,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_check.add_argument("template", help="Path to the user template .pptx")
     p_check.set_defaults(func=_cmd_template_check)
+
+    p_review = sub.add_parser(
+        "text-review",
+        help="Fact checklist: original vs output per episode of a Storyboard (naryad No020)",
+    )
+    p_review.add_argument("storyboard", help="Path to a Storyboard JSON with text (razkadr text output)")
+    p_review.add_argument(
+        "--out",
+        default=None,
+        metavar="PATH",
+        help="Write the JSON report to PATH (default: print the summary only)",
+    )
+    p_review.set_defaults(func=_cmd_text_review)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

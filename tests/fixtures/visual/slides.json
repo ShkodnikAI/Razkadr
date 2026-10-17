@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "title": "Шакшука на сковороде",
+    "output_lang": "ru"
+  },
+  "slides": [
+    {
+      "layout": "title",
+      "slots": {
+        "heading": "Шакшука на сковороде",
+        "subheading": "Готовая шакшука в чугунной сковороде: яйца в томатном соусе, зелень.",
+        "frame": {
+          "path": "frames/f_title.jpg",
+          "t": 12.5,
+          "episode_id": "e1"
+        }
+      },
+      "source_refs": [
+        "project"
+      ],
+      "warnings": []
+    },
+    {
+      "layout": "hero_caption",
+      "slots": {
+        "frame": {
+          "path": "frames/f_hero.jpg",
+          "t": 787.0,
+          "episode_id": "e1"
+        },
+        "caption": "Готовая шакшука в чугунной сковороде: яйца в томатном соусе, зелень.",
+        "timecode": "13:07"
+      },
+      "source_refs": [
+        "e1"
+      ],
+      "warnings": []
+    },
+    {
+      "layout": "ingredients_list",
+      "slots": {
+        "heading": "Ингредиенты",
+        "frame": {
+          "path": "frames/f_ing.jpg",
+          "t": 16.0,
+          "episode_id": "e2"
+        },
+        "items": [
+          "Яйца — 4 шт.",
+          "Помидоры — 500 г",
+          "Перец болгарский — 1 шт.",
+          "Лук — 1 шт.",
+          "Чеснок — 2 зубчика",
+          "Паприка — 1 ч. л.",
+          "Зира — 0,5 ч. л.",
+          "Оливковое масло — 2 ст. л."
+        ],
+        "timecode": "0:12"
+      },
+      "source_refs": [
+        "e2"
+      ],
+      "warnings": []
+    },
+    {
+      "layout": "steps_grid",
+      "slots": {
+        "heading": "Шаги",
+        "cells": [
+          {
+            "frame": {
+              "path": "frames/f_step1.jpg",
+              "t": 52.5,
+              "episode_id": "e3"
+            },
+            "text": "Разогрейте масло и обжарьте лук до мягкости.",
+            "number": 1,
+            "timecode": "0:45"
+          },
+          {
+            "frame": {
+              "path": "frames/f_step2.jpg",
+              "t": 130.0,
+              "episode_id": "e4"
+            },
+            "text": "Добавьте помидоры и специи, тушите 10 минут.",
+            "number": 2,
+            "timecode": "2:10"
+          }
+        ]
+      },
+      "source_refs": [
+        "e3",
+        "e4"
+      ],
+      "warnings": []
+    },
+    {
+      "layout": "serving",
+      "slots": {
+        "heading": "Подача",
+        "frame": {
+          "path": "frames/f_serving.jpg",
+          "t": 800.0,
+          "episode_id": "e5"
+        },
+        "caption": "Serve hot with fresh pita bread and cilantro.",
+        "timecode": "13:20"
+      },
+      "source_refs": [
+        "e5"
+      ],
+      "warnings": []
+    }
+  ]
+}

@@ -25,7 +25,8 @@ runs/<run_id>/
     manifest.json     # index: провайдер, модель, версия, dim, число векторов (kind=index)
     vectors.bin       # payload векторов; путь фиксируется в manifest.vectors_file
     meta.db           # SQLite: id/space/метаданные векторов + meta (dim, provider, model, version)
-  storyboard.json     # storyboard (наряд №002), создаётся отбором (волна 2)
+  storyboard.json     # storyboard (наряд №002): черновик создаётся отбором (волна 2),
+                      #   стадия text (волна 3) заполняет episodes[].text, отчёт — text.json
 ```
 
 `run_id` — имя каталога и поле `run_id` в `run.json` (одинаковые). Пути внутри артефактов (`frames[].file`, `vectors_file`) задаются относительно каталога запуска: каталог можно перемещать целиком.

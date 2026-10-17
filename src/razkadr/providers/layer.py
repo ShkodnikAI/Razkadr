@@ -37,9 +37,11 @@ from razkadr.providers.base import (
     TransientError,
 )
 from razkadr.providers.cache import CallCache, call_key
+from razkadr.providers.cohere import CohereEmbeddings
 from razkadr.providers.deepgram import DeepgramASR
 from razkadr.providers.fakes import FakeASR, FakeEmbeddings, FakeLLM, FakeVLM
 from razkadr.providers.gemini import GeminiASR
+from razkadr.providers.openai import OpenAIEmbeddings
 from razkadr.providers.tariffs import tariff_from_config
 from razkadr.providers.types import Message, Transcript, Vector
 from razkadr.runctx import RunContext, file_sha256
@@ -278,6 +280,21 @@ FACTORIES: dict[str, dict[str, Callable[[dict], object]]] = {
     "embed": {
         "fake": lambda s: FakeEmbeddings(model=s.get("model", "fake-embed-v2"), dim=int(s.get("dim", 8))),
         "fake-alt": lambda s: FakeEmbeddings(name="fake-alt", model=s.get("model", "fake-embed-alt")),
+        # real adapters (naryad 038, ADR-0006): default text-only + multimodal fallback
+        "openai": lambda s: OpenAIEmbeddings(
+            model=s.get("model", "text-embedding-3-small"),
+            api_key=resolve_key(s, "embeddings") or "",
+            max_batch=int(s.get("max_batch", 2048)),
+        ),
+        "cohere": lambda s: CohereEmbeddings(
+            model=s.get("model", "embed-v4.0"),
+            api_key=resolve_key(s, "embeddings") or "",
+            max_batch=int(s.get("max_batch", 96)),
+            input_type=s.get("input_type", "search_document"),
+            max_image_dim=int(s.get("max_image_dim", 1024)),
+            max_image_bytes=int(s.get("max_image_bytes", 4_000_000)),
+            jpeg_quality=int(s.get("jpeg_quality", 85)),
+        ),
     },
     "vlm": {
         "fake": lambda s: FakeVLM(model=s.get("model", "fake-vision-1")),

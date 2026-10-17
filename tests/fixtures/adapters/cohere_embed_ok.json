@@ -1,0 +1,12 @@
+{
+  "embeddings": {
+    "float": [
+      [0.11, 0.22, 0.33],
+      [0.44, 0.55, 0.66]
+    ]
+  },
+  "meta": {
+    "billed_units": {"input_tokens": 12},
+    "api_version": {"version": "2"}
+  }
+}

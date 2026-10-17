@@ -341,7 +341,15 @@ def _cmd_build(args: argparse.Namespace) -> int:
 
         # text (naryad 017/018): fills episodes[].text; rewrites storyboard.json
         _storyboard, text_report = run_text(ctx, config)
-        storyboard = json.loads((ctx.dir / "storyboard.json").read_text(encoding="utf-8"))
+        try:
+            storyboard = json.loads((ctx.dir / "storyboard.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            detail = getattr(exc, "strerror", None) or exc
+            print(
+                f"razkadr build: storyboard.json is unreadable after the text stage: {detail}",
+                file=sys.stderr,
+            )
+            return EXIT_FILE_ERROR
         issues = validate_document(storyboard, "storyboard")
         if issues:
             print("razkadr build: the storyboard after text is invalid:", file=sys.stderr)
@@ -358,7 +366,17 @@ def _cmd_build(args: argparse.Namespace) -> int:
         ) as st:
             if not st.cached or not slides_path.is_file():
                 write_slides(layout_storyboard(storyboard, config, lang=args.lang), slides_path)
-        slides = json.loads(slides_path.read_text(encoding="utf-8"))
+        slides = None
+        try:
+            slides = json.loads(slides_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            detail = getattr(exc, "strerror", None) or exc
+            print(
+                f"razkadr build: slides.json is not valid JSON: {detail} - delete the file "
+                "and re-run with --resume, the layout stage will recompute it",
+                file=sys.stderr,
+            )
+            return EXIT_FILE_ERROR
 
         out_dir.mkdir(parents=True, exist_ok=True)
         deck_path = out_dir / "deck.pptx"

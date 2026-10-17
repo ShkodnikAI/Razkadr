@@ -71,7 +71,7 @@ from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
 from razkadr.providers.base import ProviderConfigError
 from razkadr.providers.layer import ProviderLayer
-from razkadr.runctx import RunContext, file_sha256
+from razkadr.runctx import RunContext, file_sha256, read_cached_json
 from razkadr.validation import validate_document
 
 logger = get_logger("ocr")
@@ -242,7 +242,7 @@ def run_ocr(ctx: RunContext, config: dict) -> dict:
         "ocr", inputs={"frames_sha256": file_sha256(frames_path)}, params=stage_params
     ) as st:
         if st.cached:
-            return json.loads((ctx.dir / OCR_JSON).read_text(encoding="utf-8"))
+            return read_cached_json(ctx.dir / OCR_JSON, "ocr.json", OcrError)
 
         accepted = [f for f in frames_doc.get("frames", []) if not f.get("rejected")]
         results: list[dict] = []

@@ -49,7 +49,7 @@ from razkadr.log import get_logger
 from razkadr.providers.base import ProviderConfigError
 from razkadr.providers.layer import ProviderLayer
 from razkadr.providers.types import Transcript
-from razkadr.runctx import RunContext, file_sha256
+from razkadr.runctx import RunContext, file_sha256, read_cached_json
 from razkadr.validation import validate_document
 
 logger = get_logger("transcript")
@@ -238,7 +238,7 @@ def run_transcript(ctx: RunContext, config: dict) -> dict:
 
     with ctx.stage("transcript", inputs=inputs, params=stage_params) as st:
         if st.cached:
-            return json.loads((ctx.dir / TRANSCRIPT_JSON).read_text(encoding="utf-8"))
+            return read_cached_json(ctx.dir / TRANSCRIPT_JSON, "transcript.json", TranscriptError)
 
         if audio_sha is None:
             spans: list[tuple[float, float]] = []

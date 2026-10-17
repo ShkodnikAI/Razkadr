@@ -34,7 +34,7 @@ from pathlib import Path
 
 from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
-from razkadr.runctx import RunContext
+from razkadr.runctx import RunContext, read_cached_json
 from razkadr.validation import validate_document
 
 logger = get_logger("frames")
@@ -203,7 +203,7 @@ def run_frames(ctx: RunContext, config: dict) -> dict:
 
     with ctx.stage("frames", inputs={"normalized_sha256": source["sha256"]}, params=params) as st:
         if st.cached:
-            return json.loads((ctx.dir / FRAMES_JSON).read_text(encoding="utf-8"))
+            return read_cached_json(ctx.dir / FRAMES_JSON, "frames.json", FramesError)
 
         scenes = detect_scenes(video_path, fps, params)
         candidates = _candidates(scenes, duration, params)

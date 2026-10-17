@@ -71,7 +71,7 @@ from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
 from razkadr.providers.base import ProviderConfigError
 from razkadr.providers.layer import ProviderLayer
-from razkadr.runctx import RunContext, file_sha256
+from razkadr.runctx import RunContext, file_sha256, read_cached_json
 from razkadr.validation import validate_document
 from razkadr.vectorstore import SPACE_KINDS, LocalVectorStore, VectorStoreError
 
@@ -177,7 +177,7 @@ def run_index(ctx: RunContext, config: dict) -> tuple[dict | None, dict[str, int
             # the skip case leaves no manifest behind
             if not manifest_path.is_file():
                 return None, {}
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest = read_cached_json(manifest_path, "index/manifest.json", IndexStageError)
             return manifest, _space_counts(ctx.dir)
 
         if not embeddings_section.get("provider"):

@@ -29,7 +29,7 @@ from pathlib import Path
 
 from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
-from razkadr.runctx import RunContext, file_sha256
+from razkadr.runctx import RunContext, file_sha256, read_cached_json
 from razkadr.validation import validate_document
 
 logger = get_logger("ingest")
@@ -291,7 +291,7 @@ def run_ingest(ctx: RunContext, source_input: str, config: dict) -> dict:
 
     with ctx.stage("ingest", inputs=inputs, params=stage_params) as st:
         if st.cached:
-            return json.loads((ctx.dir / SOURCE_JSON).read_text(encoding="utf-8"))
+            return read_cached_json(ctx.dir / SOURCE_JSON, "source.json", IngestError)
 
         if is_url:
             src = ctx.dir / ORIGINAL_NAME

@@ -9,7 +9,8 @@ and selection results), select (real, naryad 014: preset + hybrid search
 -> draft Storyboard), eval (real, naryad 015: hit@k over the reference
 set), layout (real, naryad 021: Storyboard -> slides.json), render (real,
 naryad 022: slides.json -> deck.pptx on the template), export-pdf (real,
-naryad 024: deck.pptx -> deck.pdf via LibreOffice headless) and stubs for
+naryad 024: deck.pptx -> deck.pdf via LibreOffice headless), template-check
+(real, naryad 023: user template report per the naming convention) and stubs for
 the remaining pipeline commands (text/build) with a unified interface
 --config/--force/--runs-dir/--resume; their logic arrives with later
 naryads.
@@ -515,6 +516,29 @@ def _cmd_export_pdf(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_template_check(args: argparse.Namespace) -> int:
+    """User template report (naryad 023). 0 = renderable, 1 = something is
+    missing (the report lists what), 2 = the file is not a PPTX."""
+    from razkadr.render.template_check import TemplateCheckError, check_template
+
+    path = Path(args.template)
+    if not path.is_file():
+        print(f"razkadr template-check: cannot read {path}: not a file", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    try:
+        ok, lines = check_template(path)
+    except TemplateCheckError as exc:
+        print(f"razkadr template-check: {exc}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    for line in lines:
+        print(line)
+    if ok:
+        print(f"razkadr template-check: {path} is ready for render")
+        return EXIT_OK
+    print(f"razkadr template-check: {path} is not ready - see docs/templates.md", file=sys.stderr)
+    return EXIT_INVALID
+
+
 def _cmd_export_json(args: argparse.Namespace) -> int:
     """Storyboard -> canonical JSON with re-validation (naryad 026).
     0 = ok, 1 = invalid, 2 = file error."""
@@ -755,6 +779,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--config", default=None, help="Path to razkadr.toml (pdf_timeout_s, default 120)"
     )
     p_export_pdf.set_defaults(func=_cmd_export_pdf)
+
+    p_check = sub.add_parser(
+        "template-check",
+        help="Check a user PPTX template against the naming convention (naryad No023)",
+    )
+    p_check.add_argument("template", help="Path to the user template .pptx")
+    p_check.set_defaults(func=_cmd_template_check)
 
     for name, naryad in STUB_COMMANDS.items():
         p_stub = sub.add_parser(name, help=f"[stub] planned by naryad No{naryad}")

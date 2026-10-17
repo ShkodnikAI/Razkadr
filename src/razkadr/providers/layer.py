@@ -41,7 +41,9 @@ from razkadr.providers.cohere import CohereEmbeddings
 from razkadr.providers.deepgram import DeepgramASR
 from razkadr.providers.fakes import FakeASR, FakeEmbeddings, FakeLLM, FakeVLM
 from razkadr.providers.gemini import GeminiASR
+from razkadr.providers.gemini_vlm import GeminiVLM
 from razkadr.providers.openai import OpenAIEmbeddings
+from razkadr.providers.openai_llm import OpenAILLM
 from razkadr.providers.tariffs import tariff_from_config
 from razkadr.providers.types import Message, Transcript, Vector
 from razkadr.runctx import RunContext, file_sha256
@@ -299,10 +301,26 @@ FACTORIES: dict[str, dict[str, Callable[[dict], object]]] = {
     "vlm": {
         "fake": lambda s: FakeVLM(model=s.get("model", "fake-vision-1")),
         "fake-alt": lambda s: FakeVLM(name="fake-alt", model=s.get("model", "fake-vision-alt")),
+        # real adapter (naryad 039, ADR-0006): default VLM
+        "gemini": lambda s: GeminiVLM(
+            model=s.get("model", "gemini-3.5-flash-lite"),
+            api_key=resolve_key(s, "vlm") or "",
+            json_mode=bool(s.get("json_mode", False)),
+            max_image_dim=int(s.get("max_image_dim", 1024)),
+            max_image_bytes=int(s.get("max_image_bytes", 4_000_000)),
+            jpeg_quality=int(s.get("jpeg_quality", 85)),
+        ),
     },
     "llm": {
         "fake": lambda s: FakeLLM(model=s.get("model", "fake-gpt-4o-mini")),
         "fake-alt": lambda s: FakeLLM(name="fake-alt", model=s.get("model", "fake-llm-alt")),
+        # real adapter (naryad 039, ADR-0006): default LLM
+        "openai": lambda s: OpenAILLM(
+            model=s.get("model", "gpt-6-luna"),
+            api_key=resolve_key(s, "llm") or "",
+            temperature=float(s.get("temperature", 0)),
+            json_mode=bool(s.get("json_mode", False)),
+        ),
     },
 }
 

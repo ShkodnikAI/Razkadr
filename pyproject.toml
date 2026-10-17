@@ -42,6 +42,7 @@ addopts = "-m 'not bench'"
 markers = [
     "ffmpeg: media tests that need the ffmpeg/ffprobe binaries; skipped when absent",
     "bench: micro-benchmarks run explicitly with 'pytest -m bench' (slow, numbers go into PRs)",
+    "live: real-network provider tests (naryad 037); skipped unless the provider API key is set",
 ]
 
 [tool.ruff]

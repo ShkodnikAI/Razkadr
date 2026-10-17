@@ -1,0 +1,5 @@
+{
+  "errCode": "Unauthorized",
+  "errMsg": "Invalid credentials.",
+  "errContext": null
+}

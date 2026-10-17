@@ -1,0 +1,15 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "{\"lang\": \"ru\", \"segments\": [{\"t_start\": 0.0, \"t_end\": 2.4, \"text\": \"Две ложки муки в миску.\"}, {\"t_start\": 2.4, \"t_end\": 5.1, \"text\": \"Разогрейте сковороду на среднем огне.\"}]}"
+          }
+        ]
+      },
+      "finishReason": "STOP"
+    }
+  ],
+  "usageMetadata": {"promptTokenCount": 100, "candidatesTokenCount": 40, "totalTokenCount": 140}
+}

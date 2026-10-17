@@ -1,0 +1,30 @@
+{
+  "metadata": {
+    "request_id": "00000000-0000-0000-0000-000000000000",
+    "duration": 4.0,
+    "channels": 1
+  },
+  "results": {
+    "channels": [
+      {
+        "detected_language": "en-US",
+        "alternatives": [
+          {
+            "transcript": "Add two cups of flour. Stir until smooth.",
+            "confidence": 0.93,
+            "words": [
+              {"word": "add", "punctuated_word": "Add", "start": 0.0, "end": 0.3, "confidence": 0.98},
+              {"word": "two", "punctuated_word": "two", "start": 0.4, "end": 0.6, "confidence": 0.97},
+              {"word": "cups", "punctuated_word": "cups", "start": 0.7, "end": 1.0, "confidence": 0.96},
+              {"word": "of", "punctuated_word": "of", "start": 1.1, "end": 1.2, "confidence": 0.95},
+              {"word": "flour", "punctuated_word": "flour.", "start": 1.3, "end": 1.6, "confidence": 0.94},
+              {"word": "stir", "punctuated_word": "Stir", "start": 2.6, "end": 2.9, "confidence": 0.95},
+              {"word": "until", "punctuated_word": "until", "start": 3.0, "end": 3.2, "confidence": 0.94},
+              {"word": "smooth", "punctuated_word": "smooth.", "start": 3.3, "end": 3.8, "confidence": 0.93}
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

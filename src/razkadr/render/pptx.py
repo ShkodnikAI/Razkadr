@@ -29,6 +29,7 @@ from pptx import Presentation
 from pptx.util import Emu, Pt
 
 TEMPLATE_RELPATH = "templates/razkadr-default.pptx"
+USER_LAYOUT_PREFIX = "razkadr:"
 LINE_HEIGHT = 1.25  # conservative single-spacing estimate
 INSET_SIDE_IN = 0.06  # template bodyPr insets (scripts/templates/build_default.py)
 INSET_TB_IN = 0.03
@@ -56,6 +57,10 @@ START_SIZES = {
     "timecode": 14,
     "cell_timecode": 11,
 }
+
+# slot kinds a template may omit without degrading the deck (naryad 023):
+# absent optional placeholders are skipped silently, required ones warn
+OPTIONAL_KINDS = {"subheading", "timecode", "cell_number", "cell_timecode"}
 
 
 class RenderError(Exception):
@@ -147,11 +152,50 @@ def resolve_template(template: str | Path | None) -> Path:
     )
 
 
-def _layout_by_name(prs: Presentation, name: str):
-    for layout in prs.slide_masters[0].slide_layouts:
-        if layout.name == name:
-            return layout
-    raise RenderError(f"template has no layout '{name}'")
+def resolve_layout(prs: Presentation, macro: str) -> tuple[object, str]:
+    """Find the layout for a macro layout name in either dialect.
+
+    User templates name layouts ``razkadr:<макет>`` (naryad 023); the
+    reference template uses the bare macro names. The user dialect wins
+    when both exist. Returns ``(layout, dialect)`` with dialect in
+    ``{"user", "default"}``."""
+    for wanted, dialect in ((f"{USER_LAYOUT_PREFIX}{macro}", "user"), (macro, "default")):
+        for layout in prs.slide_masters[0].slide_layouts:
+            if layout.name == wanted:
+                return layout, dialect
+    raise RenderError(
+        f"template has no layout for '{macro}' (looked for "
+        f"'{USER_LAYOUT_PREFIX}{macro}' or '{macro}'; see docs/templates.md)"
+    )
+
+
+# user-dialect slot names (naryad 023, docs/templates.md) -> internal names
+_USER_SINGLE_SLOTS = {
+    "slot:title": "heading",
+    "slot:subtitle": "subheading",
+    "slot:caption": "caption",
+    "slot:timecode": "timecode",
+    "slot:list": "items",
+    "slot:image_1": "frame",
+}
+_USER_CELL_KINDS = {"image": "frame", "text": "text", "number": "number", "timecode": "timecode"}
+
+
+def _to_internal(ph_name: str, macro: str) -> str | None:
+    """Translate a user-dialect placeholder name (``slot:...``) to the
+    internal slot name; None for shapes that are not slots. In the default
+    dialect the layout placeholder names are internal already."""
+    if macro == "steps_grid":
+        if ph_name == "slot:title":
+            return "heading"
+        parts = ph_name.split("_", 1)
+        if len(parts) == 2 and parts[0] in {f"slot:{k}" for k in _USER_CELL_KINDS}:
+            kind = parts[0].split(":", 1)[1]
+            n = parts[1]
+            if n.isdigit() and 1 <= int(n) <= 6:
+                return f"cell{int(n)}_{_USER_CELL_KINDS[kind]}"
+        return None
+    return _USER_SINGLE_SLOTS.get(ph_name)
 
 
 def _slot_kind(name: str) -> str:
@@ -180,13 +224,15 @@ def _make_inheritance_explicit(slide_ph, layout_ph) -> None:
         slide_ph._element.spPr.append(deepcopy(xfrm))
 
 
-def _slot_shapes(slide, layout) -> tuple[dict, dict[str, int]]:
-    """Map template slot names to the cloned slide placeholders.
+def _slot_shapes(slide, layout, macro: str, dialect: str) -> tuple[dict, dict[str, int], dict]:
+    """Map internal slot names to the cloned slide placeholders.
 
     ``add_slide`` rebuilds placeholder clones with generic names, so the
     name->shape mapping goes through the layout: the layout placeholder's
     name and ph idx give the slide placeholder (clones keep the ph idx).
-    Clones are renamed to the slot names and get explicit geometry+style
+    In the user dialect the layout placeholder names are ``slot:...`` and
+    are translated to internal names (non-slot shapes are skipped).
+    Clones are renamed to the internal names and get explicit geometry
     (see ``_make_inheritance_explicit``); the declared start font size
     comes from the layout placeholder."""
     by_idx = {}
@@ -195,7 +241,10 @@ def _slot_shapes(slide, layout) -> tuple[dict, dict[str, int]]:
             by_idx[shape.placeholder_format.idx] = shape
     shapes, start_sizes, styles = {}, {}, {}
     for layout_ph in layout.placeholders:
-        name = layout_ph.name
+        raw = layout_ph.name
+        name = _to_internal(raw, macro) if dialect == "user" else raw
+        if name is None:
+            continue
         slide_ph = by_idx.get(layout_ph.placeholder_format.idx)
         if slide_ph is None:
             continue
@@ -275,7 +324,8 @@ def _fill_text(
     """Fill one text placeholder and auto-fit its size within the slot."""
     placeholder = shapes.get(name)
     if placeholder is None:
-        warnings.append(f"placeholder missing: {name} (slide {slide_no})")
+        if _slot_kind(name) not in OPTIONAL_KINDS:
+            warnings.append(f"placeholder missing: {name} (slide {slide_no})")
         return
     lines = text.split("\n") if text else []
     if bullet:
@@ -328,15 +378,34 @@ def _place_frame(
     shapes,
     name: str,
     frame_slot: dict,
-    box: tuple,
+    box: tuple | None,
     base_dir: Path | None,
     slide_no: int,
     warnings: list[str],
 ) -> bool:
-    """Replace an empty picture placeholder with the real frame image."""
+    """Replace an empty picture placeholder with the real frame image.
+
+    ``box`` is (left, top, width, height) in EMU; when None the
+    placeholder's own geometry is used (user templates keep their design).
+    A placeholder without resolvable geometry is skipped with a warning."""
     placeholder = shapes.get(name)
     if placeholder is not None:
+        if box is None:
+            try:
+                box = (placeholder.left, placeholder.top, placeholder.width, placeholder.height)
+            except (AttributeError, TypeError):
+                box = None
+            if not all(v is not None for v in (box or ())):
+                warnings.append(
+                    f"frame placeholder without geometry: {name} (slide {slide_no})"
+                )
+                _drop(placeholder)
+                return False
         _drop(placeholder)
+    elif box is None:
+        # no placeholder and no explicit geometry: nothing to place into
+        warnings.append(f"no slot for frame: {name} (slide {slide_no})")
+        return False
     path = frame_slot.get("path", "")
     image = (base_dir / path) if base_dir else Path(path)
     if not image.is_file():
@@ -425,9 +494,25 @@ def _fill_simple(slide, slide_doc, shapes, start_sizes, styles, min_sz, slide_no
     return 0
 
 
-def _fill_steps_grid(slide, slide_doc, shapes, start_sizes, styles, min_sz, slide_no, warnings, base_dir):
-    """Reposition the used cell groups per slides.json geometry
-    (columns=2 -> 2x2 grid, columns=3 -> 3x2), drop unused ones."""
+def _fill_steps_grid(
+    slide,
+    slide_doc,
+    shapes,
+    start_sizes,
+    styles,
+    min_sz,
+    slide_no,
+    warnings,
+    base_dir,
+    reposition: bool,
+):
+    """Fill the steps grid.
+
+    ``reposition=True`` (reference template): recompute the grid per
+    slides.json geometry (columns=2 -> 2x2, 3 -> 3x2) and move the cell
+    groups. ``reposition=False`` (user templates): the template owns the
+    geometry - cells fill the placeholder groups in template order, and
+    cells without a complete group are dropped with a warning."""
     slots = slide_doc["slots"]
     heading = slots.get("heading")
     if heading:
@@ -440,7 +525,7 @@ def _fill_steps_grid(slide, slide_doc, shapes, start_sizes, styles, min_sz, slid
     columns = slots.get("columns", 2)
     cells = slots.get("cells", [])
     cols = 2 if columns == 2 else 3
-    if len(cells) > cols * 2:
+    if len(cells) > cols * 2 and reposition:
         warnings.append(
             f"cells_overflow: {len(cells)} cells for columns={columns} on slide {slide_no}"
         )
@@ -455,25 +540,41 @@ def _fill_steps_grid(slide, slide_doc, shapes, start_sizes, styles, min_sz, slid
     ch = (area_bottom - area_top - gap_y) / 2
 
     pictures = 0
+    # user templates own the geometry: a cell can only be placed when the
+    # template has a placeholder group for it
+    groups = sum(
+        1
+        for i in range(1, 7)
+        if any(shapes.get(f"cell{i}_{k}") is not None for k in ("frame", "text"))
+    )
+    if not reposition and len(cells) > groups:
+        warnings.append(
+            f"cells_overflow: {len(cells)} cells but the template has {groups} cell "
+            f"group(s) on slide {slide_no}; extra cells are dropped"
+        )
     for i in range(1, 7):
         names = (f"cell{i}_number", f"cell{i}_timecode", f"cell{i}_frame", f"cell{i}_text")
         cell_index = i - 1
-        if cell_index >= len(cells):
+        if cell_index >= len(cells) or (not reposition and cell_index >= groups):
             for name in names:  # unused group: drop the cloned placeholders
                 placeholder = shapes.get(name)
                 if placeholder is not None:
                     _drop(placeholder)
             continue
         cell = cells[cell_index]
-        col, row = cell_index % cols, cell_index // cols
-        cx = area_left + col * (cw + gap_x)
-        cy = area_top + row * (ch + gap_y)
+        if reposition:
+            col, row = cell_index % cols, cell_index // cols
+            cx = area_left + col * (cw + gap_x)
+            cy = area_top + row * (ch + gap_y)
+        else:
+            cx = cy = 0  # user geometry: positions come from the placeholders
         badge_h, frame_w, pad = 347472, 0.46, 109728
 
         number = shapes.get(names[0])
         if number is not None:
-            number.left, number.top = Emu(int(cx)), Emu(int(cy))
-            number.width, number.height = Emu(502920), Emu(badge_h)
+            if reposition:
+                number.left, number.top = Emu(int(cx)), Emu(int(cy))
+                number.width, number.height = Emu(502920), Emu(badge_h)
             _fill_text(
                 shapes, names[0], str(cell["number"]), kind="cell_number",
                 start_sz=start_sizes.get(names[0], START_SIZES["cell_number"]),
@@ -482,8 +583,9 @@ def _fill_steps_grid(slide, slide_doc, shapes, start_sizes, styles, min_sz, slid
             )
         timecode = shapes.get(names[1])
         if timecode is not None:
-            timecode.left, timecode.top = Emu(int(cx + cw - 1188720)), Emu(int(cy))
-            timecode.width, timecode.height = Emu(1188720), Emu(badge_h)
+            if reposition:
+                timecode.left, timecode.top = Emu(int(cx + cw - 1188720)), Emu(int(cy))
+                timecode.width, timecode.height = Emu(1188720), Emu(badge_h)
             _fill_text(
                 shapes, names[1], str(cell["timecode"]), kind="cell_timecode",
                 start_sz=start_sizes.get(names[1], START_SIZES["cell_timecode"]),
@@ -491,24 +593,27 @@ def _fill_steps_grid(slide, slide_doc, shapes, start_sizes, styles, min_sz, slid
                 style=styles.get(names[1]),
             )
         frame = shapes.get(names[2])
-        frame_box = (
-            int(cx), int(cy + badge_h),
-            int(cw * frame_w), int(ch - badge_h - pad),
-        )
-        if frame is not None:
-            frame.left, frame.top = Emu(frame_box[0]), Emu(frame_box[1])
-            frame.width, frame.height = Emu(frame_box[2]), Emu(frame_box[3])
-            ok = _place_frame(
-                slide, shapes, names[2], cell["frame"], frame_box, base_dir, slide_no, warnings
+        frame_box = None
+        if reposition:
+            frame_box = (
+                int(cx), int(cy + badge_h),
+                int(cw * frame_w), int(ch - badge_h - pad),
             )
-            if ok:
-                pictures += 1
+            if frame is not None:
+                frame.left, frame.top = Emu(frame_box[0]), Emu(frame_box[1])
+                frame.width, frame.height = Emu(frame_box[2]), Emu(frame_box[3])
+        ok = _place_frame(
+            slide, shapes, names[2], cell["frame"], frame_box, base_dir, slide_no, warnings
+        )
+        if ok:
+            pictures += 1
         text = shapes.get(names[3])
         if text is not None:
-            text.left = Emu(int(cx + cw * frame_w + pad))
-            text.top = Emu(int(cy + badge_h))
-            text.width = Emu(int(cw * (1 - frame_w) - pad))
-            text.height = Emu(int(ch - badge_h - pad))
+            if reposition:
+                text.left = Emu(int(cx + cw * frame_w + pad))
+                text.top = Emu(int(cy + badge_h))
+                text.width = Emu(int(cw * (1 - frame_w) - pad))
+                text.height = Emu(int(ch - badge_h - pad))
             _fill_text(
                 shapes, names[3], str(cell["text"]), kind="cell_text",
                 start_sz=start_sizes.get(names[3], START_SIZES["cell_text"]),
@@ -536,12 +641,14 @@ def render_pptx(
     prs = Presentation(str(template_path))
     stats = {"slides": 0, "pictures": 0, "warnings": []}
     for slide_no, slide_doc in enumerate(slides_doc["slides"], 1):
-        layout = _layout_by_name(prs, slide_doc["layout"])
+        macro = slide_doc["layout"]
+        layout, dialect = resolve_layout(prs, macro)
         slide = prs.slides.add_slide(layout)
-        shapes, start_sizes, styles = _slot_shapes(slide, layout)
-        if slide_doc["layout"] == "steps_grid":
+        shapes, start_sizes, styles = _slot_shapes(slide, layout, macro, dialect)
+        if macro == "steps_grid":
             pictures = _fill_steps_grid(
-                slide, slide_doc, shapes, start_sizes, styles, min_font_pt, slide_no, stats["warnings"], base_dir
+                slide, slide_doc, shapes, start_sizes, styles, min_font_pt, slide_no,
+                stats["warnings"], base_dir, reposition=(dialect == "default"),
             )
         else:
             pictures = _fill_simple(

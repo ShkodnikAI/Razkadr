@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "lang": "ru",
+  "warnings": [],
+  "slides": [
+    {
+      "layout": "title",
+      "slots": {
+        "heading": "Шакшука на сковороде",
+        "subheading": "Готовая шакшука в чугунной сковороде: яйца в томатном соусе, зелень.",
+        "frame": {
+          "path": "frames/v1_0047100.jpg",
+          "t": 787.0,
+          "episode_id": "e1"
+        }
+      },
+      "source_refs": [
+        "project"
+      ],
+      "warnings": []
+    },
+    {
+      "layout": "hero_caption",
+      "slots": {
+        "frame": {
+          "path": "frames/v1_0047100.jpg",
+          "t": 787.0,
+          "episode_id": "e1"
+        },
+        "caption": "Готовая шакшука в чугунной сковороде: яйца в томатном соусе, зелень.",
+        "timecode": "13:00"
+      },
+      "source_refs": [
+        "e1"
+      ],
+      "warnings": []
+    },
+    {
+      "layout": "ingredients_list",
+      "slots": {
+        "frame": {
+          "path": "frames/v1_0000800.jpg",
+          "t": 16.0,
+          "episode_id": "e2"
+        },
+        "heading": "Ингредиенты",
+        "items": [
+          "Яйца — 4 шт.",
+          "помидоры — 500 г",
+          "перец болгарский — 1 шт.",
+          "лук — 1 шт.",
+          "чеснок — 2 зубчика",
+          "паприка — 1 ч. л.",
+          "зира — 0",
+          "5 ч. л.",
+          "соль",
+          "оливковое масло — 2 ст. л."
+        ]
+      },
+      "source_refs": [
+        "e2"
+      ],
+      "warnings": []
+    },
+    {
+      "layout": "steps_grid",
+      "slots": {
+        "columns": 2,
+        "heading": "Шаги",
+        "cells": [
+          {
+            "frame": {
+              "path": "frames/v1_0002100.jpg",
+              "t": 52.5,
+              "episode_id": "e3"
+            },
+            "number": 1,
+            "text": "Разогрейте масло и обжарьте лук с перцем до мягкости, 3–4 минуты.",
+            "timecode": "0:45"
+          }
+        ]
+      },
+      "source_refs": [
+        "e3"
+      ],
+      "warnings": []
+    }
+  ]
+}

@@ -10,7 +10,9 @@ and selection results), select (real, naryad 014: preset + hybrid search
 Storyboard), eval (real, naryad 015: hit@k over the reference set),
 layout (real, naryad 021: Storyboard -> slides.json), render (real,
 naryad 022: slides.json -> deck.pptx on the template), export-pdf (real,
-naryad 024: deck.pptx -> deck.pdf via LibreOffice headless), template-check
+naryad 024: deck.pptx -> deck.pdf via LibreOffice headless), export-gslides
+(real, naryad 025: deck.pptx -> Google Slides via the Drive API, OAuth
+token from the environment), template-check
 (real, naryad 023: user template report per the naming convention) and
 build (real, naryad 028: the end-to-end run - a video in, the result
 package deck.pptx + deck.pdf + deck.html + storyboard.json out).
@@ -826,6 +828,37 @@ def _cmd_export_pdf(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_export_gslides(args: argparse.Namespace) -> int:
+    """Deck -> Google Slides via the Drive API (naryad 025). 0 = ok,
+    1 = provider/export failure (auth, quota, network, bad response),
+    2 = input unreadable. The OAuth token comes from the environment
+    ([google] access_token_env); it is never printed or logged."""
+    from razkadr.config import load_config
+    from razkadr.log import SECRETS
+    from razkadr.providers.base import ProviderError
+    from razkadr.render.gslides import export_gslides
+
+    deck = Path(args.deck)
+    if not deck.is_file():
+        print(f"razkadr export-gslides: cannot read {deck}: not a file", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    config = load_config(args.config)
+    try:
+        upload = export_gslides(deck, config, name=args.name)
+    except ProviderError as exc:
+        print(f"razkadr export-gslides: {SECRETS.mask(str(exc))}", file=sys.stderr)
+        return EXIT_INVALID
+    if args.out:
+        write_json_atomic(
+            Path(args.out),
+            {"file_id": upload.file_id, "name": upload.name, "link": upload.link},
+        )
+        print(f"razkadr export-gslides: {upload.link} (artifact: {args.out})")
+    else:
+        print(f"razkadr export-gslides: {upload.link}")
+    return EXIT_OK
+
+
 def _cmd_text_review(args: argparse.Namespace) -> int:
     """Fact checklist and comparison tool (naryad 020): for every episode with
     text, compare text.original with text.output - numbers, temperatures,
@@ -1152,6 +1185,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--config", default=None, help="Path to razkadr.toml (pdf_timeout_s, default 120)"
     )
     p_export_pdf.set_defaults(func=_cmd_export_pdf)
+
+    p_export_gslides = sub.add_parser(
+        "export-gslides",
+        help="Deck -> Google Slides: upload deck.pptx to Drive with conversion (naryad No025)",
+    )
+    p_export_gslides.add_argument("deck", help="Path to deck.pptx (razkadr render output)")
+    p_export_gslides.add_argument(
+        "--name", default=None, metavar="NAME", help="Presentation title (default: the deck file stem)"
+    )
+    p_export_gslides.add_argument(
+        "--out",
+        default=None,
+        metavar="PATH",
+        help="Write the JSON artifact {file_id, name, link} to PATH",
+    )
+    p_export_gslides.add_argument(
+        "--config",
+        default=None,
+        help="Path to razkadr.toml ([google] access_token_env, folder_id, timeout_s)",
+    )
+    p_export_gslides.set_defaults(func=_cmd_export_gslides)
 
     p_check = sub.add_parser(
         "template-check",

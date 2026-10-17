@@ -32,8 +32,9 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 from pathlib import Path
 
+from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
-from razkadr.runctx import RunContext
+from razkadr.runctx import RunContext, read_cached_json
 from razkadr.validation import validate_document
 
 logger = get_logger("frames")
@@ -202,7 +203,7 @@ def run_frames(ctx: RunContext, config: dict) -> dict:
 
     with ctx.stage("frames", inputs={"normalized_sha256": source["sha256"]}, params=params) as st:
         if st.cached:
-            return json.loads((ctx.dir / FRAMES_JSON).read_text(encoding="utf-8"))
+            return read_cached_json(ctx.dir / FRAMES_JSON, "frames.json", FramesError)
 
         scenes = detect_scenes(video_path, fps, params)
         candidates = _candidates(scenes, duration, params)
@@ -260,7 +261,7 @@ def run_frames(ctx: RunContext, config: dict) -> dict:
         issues = validate_document(data, "frames")
         if issues:
             raise FramesError("frames.json failed schema validation: " + "; ".join(issues))
-        (ctx.dir / FRAMES_JSON).write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        write_json_atomic(ctx.dir / FRAMES_JSON, data)
         n_rejected = sum(1 for e in entries if e.get("rejected"))
         logger.info(
             "frames done",

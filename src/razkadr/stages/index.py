@@ -67,10 +67,11 @@ import json
 import shutil
 from pathlib import Path
 
+from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
 from razkadr.providers.base import ProviderConfigError
 from razkadr.providers.layer import ProviderLayer
-from razkadr.runctx import RunContext, file_sha256
+from razkadr.runctx import RunContext, file_sha256, read_cached_json
 from razkadr.validation import validate_document
 from razkadr.vectorstore import SPACE_KINDS, LocalVectorStore, VectorStoreError
 
@@ -176,7 +177,7 @@ def run_index(ctx: RunContext, config: dict) -> tuple[dict | None, dict[str, int
             # the skip case leaves no manifest behind
             if not manifest_path.is_file():
                 return None, {}
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest = read_cached_json(manifest_path, "index/manifest.json", IndexStageError)
             return manifest, _space_counts(ctx.dir)
 
         if not embeddings_section.get("provider"):
@@ -332,9 +333,7 @@ def run_index(ctx: RunContext, config: dict) -> tuple[dict | None, dict[str, int
         issues = validate_document(manifest, "index")
         if issues:
             raise IndexStageError("manifest.json failed schema validation: " + "; ".join(issues))
-        (index_dir / MANIFEST_JSON).write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        write_json_atomic(index_dir / MANIFEST_JSON, manifest)
         st.outputs = {
             "dir": INDEX_DIRNAME,
             "num_vectors": manifest["num_vectors"],

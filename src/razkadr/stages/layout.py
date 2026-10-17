@@ -14,8 +14,9 @@ slots and no warnings.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
+
+from razkadr.atomicio import write_json_atomic
 
 SLIDES_SCHEMA_VERSION = "1.0"
 ELLIPSIS = "…"
@@ -295,4 +296,4 @@ def layout_storyboard(storyboard: dict, config: dict, lang: str | None = None) -
 def write_slides(slides: dict, out_path: Path) -> None:
     """Deterministic serialization: fixed key order, 2-space indent."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(slides, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_json_atomic(out_path, slides)

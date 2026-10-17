@@ -60,6 +60,25 @@ def fingerprint(obj: object) -> str:
     return hashlib.sha256(canonical_json(obj).encode("utf-8")).hexdigest()
 
 
+def read_cached_json(path: Path, what: str, error_cls: type[Exception]) -> dict:
+    """Read the stage's own artifact on a cache hit (naryad 029).
+
+    The cache marker says the stage is current, so an unreadable file
+    means disk damage or manual editing - not a crash mid-write (atomic
+    writes, also naryad 029, make that impossible for our own output).
+    The message names both remedies: recompute with --force, or delete
+    the file and resume.
+    """
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        detail = getattr(exc, "strerror", None) or exc
+        raise error_cls(
+            f"{what} is not valid JSON: {path}: {detail} - the stage cache says it is "
+            "current; re-run with --force to recompute the stage, or delete the file"
+        ) from exc
+
+
 @dataclass
 class StageHandle:
     """Passed into the stage body; cached=True means the body must be skipped."""

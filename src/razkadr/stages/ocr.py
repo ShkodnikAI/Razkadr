@@ -67,10 +67,11 @@ import json
 import re
 from pathlib import Path
 
+from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
 from razkadr.providers.base import ProviderConfigError
 from razkadr.providers.layer import ProviderLayer
-from razkadr.runctx import RunContext, file_sha256
+from razkadr.runctx import RunContext, file_sha256, read_cached_json
 from razkadr.validation import validate_document
 
 logger = get_logger("ocr")
@@ -241,7 +242,7 @@ def run_ocr(ctx: RunContext, config: dict) -> dict:
         "ocr", inputs={"frames_sha256": file_sha256(frames_path)}, params=stage_params
     ) as st:
         if st.cached:
-            return json.loads((ctx.dir / OCR_JSON).read_text(encoding="utf-8"))
+            return read_cached_json(ctx.dir / OCR_JSON, "ocr.json", OcrError)
 
         accepted = [f for f in frames_doc.get("frames", []) if not f.get("rejected")]
         results: list[dict] = []
@@ -275,9 +276,7 @@ def run_ocr(ctx: RunContext, config: dict) -> dict:
         issues = validate_document(data, "ocr")
         if issues:
             raise OcrError("ocr.json failed schema validation: " + "; ".join(issues))
-        (ctx.dir / OCR_JSON).write_text(
-            json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        write_json_atomic(ctx.dir / OCR_JSON, data)
         share = (len(sent) / len(accepted)) if accepted else 0.0
         st.outputs = {
             "json": OCR_JSON,

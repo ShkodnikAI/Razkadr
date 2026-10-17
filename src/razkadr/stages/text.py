@@ -58,6 +58,7 @@ from collections import Counter
 from importlib import resources
 from pathlib import Path
 
+from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
 from razkadr.providers.base import ProviderConfigError
 from razkadr.providers.layer import ProviderLayer
@@ -411,12 +412,8 @@ def run_text(ctx: RunContext, config: dict) -> tuple[dict, dict]:
     if issues:
         raise TextError("storyboard.json failed schema validation after the text stage: " + "; ".join(issues))
 
-    storyboard_path.write_text(
-        json.dumps(storyboard, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    (ctx.dir / TEXT_JSON).write_text(
-        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    write_json_atomic(storyboard_path, storyboard)
+    write_json_atomic(ctx.dir / TEXT_JSON, report)
     logger.info(
         "text done",
         extra={"fields": {"episodes": len(storyboard.get("episodes") or []), "modes": mode_counts}},

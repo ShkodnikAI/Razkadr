@@ -20,10 +20,11 @@ from __future__ import annotations
 
 import hashlib
 import html
-import json
 import shutil  # noqa: F401 (kept for future stream-copy of large assets)
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
+
+from razkadr.atomicio import write_json_atomic, write_text_atomic
 
 ASSETS_DIRNAME = "deck_assets"
 YOUTUBE_HOSTS = ("youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be")
@@ -274,12 +275,12 @@ def export_html(
 </body>
 </html>
 """
-    out_path.write_text(document, encoding="utf-8")
+    write_text_atomic(out_path, document)
     return out_path
 
 
 def export_json(storyboard: dict, out_path: Path) -> Path:
     """Canonical JSON rewrite of a (pre-validated) Storyboard."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(storyboard, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_json_atomic(out_path, storyboard)
     return out_path

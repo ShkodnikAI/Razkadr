@@ -22,6 +22,7 @@ EXAMPLE_FILE = {
     "run": "run.json",
     "eval_labels": "eval_labels.json",  # naryad 003: not a stage artifact, markup of a reference video
     "preset": "preset.json",  # naryad 013: domain scenario (YAML in presets/, JSON is a valid subset)
+    "slides": "slides.json",  # naryad 021: layout engine output (generated from examples/storyboard.valid.json)
 }
 
 

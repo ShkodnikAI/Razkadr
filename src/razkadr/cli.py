@@ -32,7 +32,6 @@ EXIT_NOT_IMPLEMENTED = 3
 
 # stub command -> owning naryad (shown in help and stub message)
 STUB_COMMANDS = {
-    "text": "017",
     "build": "028",
 }
 
@@ -351,6 +350,50 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_text(args: argparse.Namespace) -> int:
+    """Episode text (naryad 017): draft Storyboard + transcript -> Storyboard
+    with text (verbatim / condensed / described). Fills episodes[].text in
+    <run_dir>/storyboard.json (user_edited episodes are preserved) and writes
+    the report text.json next to it. --mode overrides [text] mode. 0 = ok,
+    2 = the stage cannot run."""
+    from pathlib import Path as _Path
+
+    from razkadr.config import load_config
+    from razkadr.providers.base import ProviderError
+    from razkadr.runctx import RunContext
+    from razkadr.stages.text import TextError, run_text
+
+    run_dir = _Path(args.run_dir)
+    if not run_dir.is_dir():
+        print(f"razkadr text: run directory not found: {run_dir}", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    config = load_config(args.config)
+    if args.mode:
+        config["text"] = {**(config.get("text") or {}), "mode": args.mode}
+    try:
+        ctx = RunContext(run_dir.parent, run_id=run_dir.name, config=config)
+        storyboard, report = run_text(ctx, config)
+    except (TextError, ProviderError) as exc:
+        print(f"razkadr text: {exc}", file=sys.stderr)
+        last = ctx.stages[-1] if ctx.stages else None
+        if last and last.get("status") == "failed":
+            print(f"  run {ctx.run_id} stopped at stage '{last['name']}'", file=sys.stderr)
+        return EXIT_FILE_ERROR
+    counts: dict[str, int] = {}
+    for entry in report["episodes"]:
+        key = "kept" if entry.get("kept") else ("skipped" if entry.get("skipped") else entry.get("text_mode", "?"))
+        counts[key] = counts.get(key, 0) + 1
+    modes_line = ", ".join(f"{mode} {n}" for mode, n in counts.items()) or "no episodes"
+    print(f"text: {run_dir / 'storyboard.json'} ({len(storyboard['episodes'])} episodes: {modes_line})")
+    if report["warnings"]:
+        for warning in report["warnings"]:
+            print(
+                f"  warning: {warning.get('episode_id', '?')}: {warning.get('code')} — {warning.get('detail', '')}",
+                file=sys.stderr,
+            )
+    return EXIT_OK
+
+
 def _cmd_stub(args: argparse.Namespace) -> int:
     print(
         f"razkadr {args.cmd}: not implemented yet (planned: naryad No{args.naryad})",
@@ -665,6 +708,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_select.add_argument("--config", default=None, help="Path to razkadr.toml (default: search)")
     p_select.set_defaults(func=_cmd_select)
+
+    p_text = sub.add_parser(
+        "text",
+        help="Episode text: verbatim / condensed / described into the Storyboard (naryad No017)",
+    )
+    p_text.add_argument("run_dir", help="Run directory with the draft Storyboard (razkadr select output)")
+    p_text.add_argument(
+        "--mode",
+        choices=("auto", "verbatim", "condensed", "described"),
+        default=None,
+        help="Text mode for all episodes (default: [text] mode, else auto)",
+    )
+    p_text.add_argument("--config", default=None, help="Path to razkadr.toml (default: search)")
+    p_text.set_defaults(func=_cmd_text)
 
     p_eval = sub.add_parser(
         "eval",

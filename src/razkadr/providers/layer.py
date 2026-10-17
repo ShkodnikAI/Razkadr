@@ -46,6 +46,7 @@ from razkadr.providers.openai import OpenAIEmbeddings
 from razkadr.providers.openai_llm import OpenAILLM
 from razkadr.providers.tariffs import tariff_from_config
 from razkadr.providers.types import Message, Transcript, Vector
+from razkadr.providers.zai import ZaiASR, ZaiLLM, ZaiVLM
 from razkadr.runctx import RunContext, file_sha256
 
 logger = get_logger("providers")
@@ -278,6 +279,10 @@ FACTORIES: dict[str, dict[str, Callable[[dict], object]]] = {
         "deepgram": lambda s: DeepgramASR(
             model=s.get("model", "nova-3"), api_key=resolve_key(s, "asr") or ""
         ),
+        # zai bridge (naryad 085): GLM models of the agent environment via the z-ai CLI; no keys
+        "zai": lambda s: ZaiASR(
+            model=s.get("model", "glm-asr"), lang=s.get("lang", "ru"), timeout_s=float(s.get("timeout_s", 120))
+        ),
     },
     "embed": {
         "fake": lambda s: FakeEmbeddings(model=s.get("model", "fake-embed-v2"), dim=int(s.get("dim", 8))),
@@ -310,6 +315,10 @@ FACTORIES: dict[str, dict[str, Callable[[dict], object]]] = {
             max_image_bytes=int(s.get("max_image_bytes", 4_000_000)),
             jpeg_quality=int(s.get("jpeg_quality", 85)),
         ),
+        # zai bridge (naryad 085): GLM vision via the z-ai CLI; no keys
+        "zai": lambda s: ZaiVLM(
+            model=s.get("model", "glm-4-plus"), timeout_s=float(s.get("timeout_s", 120))
+        ),
     },
     "llm": {
         "fake": lambda s: FakeLLM(model=s.get("model", "fake-gpt-4o-mini")),
@@ -320,6 +329,10 @@ FACTORIES: dict[str, dict[str, Callable[[dict], object]]] = {
             api_key=resolve_key(s, "llm") or "",
             temperature=float(s.get("temperature", 0)),
             json_mode=bool(s.get("json_mode", False)),
+        ),
+        # zai bridge (naryad 085): GLM chat via the z-ai CLI; no keys
+        "zai": lambda s: ZaiLLM(
+            model=s.get("model", "glm-4-plus"), timeout_s=float(s.get("timeout_s", 120))
         ),
     },
 }

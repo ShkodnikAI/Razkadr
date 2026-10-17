@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 
 import pytest
-from scripts.cost_report import load_run, render, stage_rows
+
+from razkadr.cost_report import load_run, render, stage_rows
 
 
 def make_run(

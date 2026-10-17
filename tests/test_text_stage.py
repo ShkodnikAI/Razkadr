@@ -30,12 +30,14 @@ from razkadr.stages.text import (
     describe_system_prompt,
     dominant_lang,
     normalize_answer,
+    normalize_units,
     numbers,
     numbers_preserved,
     resolve_mode,
     run_text,
     segments_in_span,
     text_params,
+    translate_system_prompt,
     truncate_at_word,
 )
 from razkadr.validation import validate_document
@@ -679,3 +681,196 @@ def test_cli_text_stage_error_exits_2(env, capsys):
 
     assert main(["text", str(ctx.dir), "--config", str(config_path)]) == EXIT_FILE_ERROR
     assert "razkadr text:" in capsys.readouterr().err
+
+
+# --- naryad 018: unit normalization ---------------------------------------------------
+
+
+def test_units_off_by_default():
+    params = text_params({})
+    assert params["units"] == {"fahrenheit_to_celsius": False, "cup_to_ml": 0}
+    text = "Запекайте при 350 °F, добавьте 2 cups муки"
+    normalized, ops = normalize_units(text, params["units"])
+    assert normalized == text and ops == []
+
+
+def test_units_fahrenheit_to_celsius():
+    normalized, ops = normalize_units("Запекайте при 350°F", {"fahrenheit_to_celsius": True, "cup_to_ml": 0})
+    assert normalized == "Запекайте при 177 °C"
+    assert ops == ["350°F -> 177 °C"]
+    # the conversion is arithmetically correct and repeatable on the output
+    again, _ = normalize_units(normalized, {"fahrenheit_to_celsius": True, "cup_to_ml": 0})
+    assert again == normalized  # °C values do not reconvert
+
+
+def test_units_fahrenheit_decimal_and_spaces():
+    normalized, _ = normalize_units("при 98,6 °F внутри", {"fahrenheit_to_celsius": True, "cup_to_ml": 0})
+    assert normalized == "при 37 °C внутри"
+
+
+def test_units_cup_to_ml():
+    normalized, ops = normalize_units("Add 2 cups flour and 0,5 cup milk", {"fahrenheit_to_celsius": False, "cup_to_ml": 240})
+    assert normalized == "Add 480 мл flour and 120 мл milk"
+    assert ops == ["2 cups -> 480 мл", "0,5 cup -> 120 мл"]
+
+
+def test_units_both_conversions_in_order():
+    normalized, ops = normalize_units(
+        "Bake at 325 °F, stir in 1 cup water",
+        {"fahrenheit_to_celsius": True, "cup_to_ml": 240},
+    )
+    assert normalized == "Bake at 163 °C, stir in 240 мл water"
+    assert len(ops) == 2
+
+
+def test_params_rejects_negative_cup_ml():
+    with pytest.raises(TextError, match="cup_to_ml"):
+        text_params({"text": {"units": {"cup_to_ml": -1}}})
+
+
+# --- naryad 018: translation ----------------------------------------------------------
+
+
+def test_translate_prompt_carries_target_lang():
+    prompt = translate_system_prompt("en")
+    assert "en" in prompt and "{{lang}}" not in prompt
+    assert "наряд №018" in prompt  # versioned file, packaged with the library
+
+
+def test_same_language_no_translation_calls(env, fake_llm_calls):
+    _, config, ctx = env
+    config["llm"] = {"provider": "fake", "answer": "сжатый текст"}
+    make_frame(ctx, "frames/f1.jpg")
+    write_draft(ctx, [episode("ep-steps", "steps", 0.0, 10.0, "frames/f1.jpg")])  # project.output_lang = ru
+    write_transcript(ctx, [seg(0, 10, "текст шага")])
+
+    storyboard = run_text(ctx, config)[0]
+
+    text = storyboard["episodes"][0]["text"]
+    assert text["mode"] == "condensed"  # auto -> condensed for speech
+    assert text["output"] == "сжатый текст"
+    assert text["output_lang"] == "ru"
+    assert fake_llm_calls[0].calls == 1  # condense only, no translate call
+
+
+def test_translation_ru_to_en_with_numbers(env, fake_llm_calls):
+    _, config, ctx = env
+    config["text"] = {"output_lang": "en"}
+    config["llm"] = {"provider": "fake", "answer": "Pour the batter, about 200 g per pancake."}
+    make_frame(ctx, "frames/f1.jpg")
+    write_draft(ctx, [episode("ep-steps", "steps", 0.0, 10.0, "frames/f1.jpg")])
+    write_transcript(ctx, [seg(0, 10, "Выливаем тесто, примерно 200 г на блин.")])
+
+    storyboard, report = run_text(ctx, config)
+
+    text = storyboard["episodes"][0]["text"]
+    assert text["mode"] == "condensed"  # condense ran first, then translate
+    assert text["original"] == "Выливаем тесто, примерно 200 г на блин."  # source stays in original
+    assert text["output"] == "Pour the batter, about 200 g per pancake."
+    assert text["output_lang"] == "en" and text["source_lang"] == "ru"
+    entry = next(e for e in report["episodes"] if e["id"] == "ep-steps")
+    assert entry["translated_to"] == "en"
+    assert fake_llm_calls[0].calls == 2  # condense (ru) + translate (en)
+    # the translation prompt got the condensed source text (the last call)
+    assert "наряд №018" in fake_llm_calls[0].last_messages[0].content
+    assert fake_llm_calls[0].last_messages[1].content == "Pour the batter, about 200 g per pancake."
+
+
+def test_translation_verbatim_mode_translates_original(env, fake_llm_calls):
+    _, config, ctx = env
+    config["text"] = {"mode": "verbatim", "output_lang": "en"}
+    config["llm"] = {"provider": "fake", "answer": "Bake 15 minutes."}
+    make_frame(ctx, "frames/f1.jpg")
+    write_draft(ctx, [episode("ep-steps", "steps", 0.0, 10.0, "frames/f1.jpg")])
+    write_transcript(ctx, [seg(0, 10, "Запекайте 15 минут.")])
+
+    storyboard = run_text(ctx, config)[0]
+
+    text = storyboard["episodes"][0]["text"]
+    assert text["mode"] == "verbatim"
+    assert text["output"] == "Bake 15 minutes."
+    assert text["output_lang"] == "en"
+
+
+def test_translation_losing_numbers_falls_back_to_source(env, fake_llm_calls):
+    _, config, ctx = env
+    config["text"] = {"mode": "verbatim", "output_lang": "en"}
+    config["llm"] = {"provider": "fake", "answer": "Bake for a while."}  # drops "15"
+    make_frame(ctx, "frames/f1.jpg")
+    write_draft(ctx, [episode("ep-steps", "steps", 0.0, 10.0, "frames/f1.jpg")])
+    write_transcript(ctx, [seg(0, 10, "Запекайте 15 минут.")])
+
+    storyboard, report = run_text(ctx, config)
+
+    text = storyboard["episodes"][0]["text"]
+    assert text["output"] == "Запекайте 15 минут."  # source-language text kept
+    assert text["output_lang"] == "ru"
+    assert any(w["code"] == "translate_fallback_source" for w in report["warnings"])
+
+
+def test_translation_no_llm_keeps_source_with_warning(env):
+    _, config, ctx = env  # no [llm] section at all
+    config["text"] = {"mode": "verbatim", "output_lang": "en"}
+    make_frame(ctx, "frames/f1.jpg")
+    write_draft(ctx, [episode("ep-steps", "steps", 0.0, 10.0, "frames/f1.jpg")])
+    write_transcript(ctx, [seg(0, 10, "текст шага")])
+
+    storyboard, report = run_text(ctx, config)
+
+    text = storyboard["episodes"][0]["text"]
+    assert text["output"] == "текст шага" and text["output_lang"] == "ru"
+    assert any(w["code"] == "translate_no_llm" for w in report["warnings"])
+
+
+def test_translation_units_normalized_before_providers(env, fake_llm_calls):
+    _, config, ctx = env
+    config["text"] = {"mode": "verbatim", "output_lang": "en"}
+    config["text"]["units"] = {"fahrenheit_to_celsius": True, "cup_to_ml": 240}
+    config["llm"] = {"provider": "fake", "answer": "Bake at 177 °C, add 240 мл milk."}
+    make_frame(ctx, "frames/f1.jpg")
+    write_draft(ctx, [episode("ep-steps", "steps", 0.0, 10.0, "frames/f1.jpg")])
+    write_transcript(ctx, [seg(0, 10, "Bake at 350 °F, add 1 cup milk.")])
+
+    storyboard, report = run_text(ctx, config)
+
+    text = storyboard["episodes"][0]["text"]
+    # the provider saw normalized text; the number invariant compares against it
+    assert text["original"] == "Bake at 177 °C, add 240 мл milk."
+    assert text["output"] == "Bake at 177 °C, add 240 мл milk."
+    assert text["output_lang"] == "en"
+    entry = next(e for e in report["episodes"] if e["id"] == "ep-steps")
+    assert entry["units_converted"] == ["350 °F -> 177 °C", "1 cup -> 240 мл"]
+    # the LLM got the normalized original, not the raw transcript
+    assert fake_llm_calls[0].last_messages[1].content == "Bake at 177 °C, add 240 мл milk."
+
+
+def test_translation_described_mode_never_translated(env, fake_llm_calls, fake_vlm_calls):
+    _, config, ctx = env
+    config["text"] = {"output_lang": "en"}
+    config["vlm"] = {"provider": "fake", "answer": "Silent frame description."}
+    config["llm"] = {"provider": "fake", "answer": "should not be called"}
+    make_frame(ctx, "frames/f1.jpg")
+    write_draft(ctx, [episode("ep-serving", "serving", 40.0, 50.0, "frames/f1.jpg")])  # silent
+    write_transcript(ctx, [])
+
+    storyboard = run_text(ctx, config)[0]
+
+    text = storyboard["episodes"][0]["text"]
+    assert text["mode"] == "described"
+    assert text["output"] == "Silent frame description."
+    assert fake_llm_calls == []  # described goes straight to the target language
+
+
+def test_cli_text_output_lang_override(env, fake_llm_calls, capsys):
+    _, _, ctx = env
+    config_path = ctx.runs_dir.parent / "razkadr.toml"
+    config_path.write_text('[llm]\nprovider = "fake"\nanswer = "Bake 15 minutes."\n', encoding="utf-8")
+    make_frame(ctx, "frames/f1.jpg")
+    write_draft(ctx, [episode("ep-steps", "steps", 0.0, 10.0, "frames/f1.jpg")])
+    write_transcript(ctx, [seg(0, 10, "Запекайте 15 минут.")])
+
+    code = main(["text", str(ctx.dir), "--config", str(config_path), "--mode", "verbatim", "--output-lang", "en"])
+    assert code == EXIT_OK
+    doc = _read_json(ctx, STORYBOARD_JSON)
+    text = doc["episodes"][0]["text"]
+    assert text["output"] == "Bake 15 minutes." and text["output_lang"] == "en"

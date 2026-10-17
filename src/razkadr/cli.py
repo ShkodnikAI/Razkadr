@@ -354,8 +354,9 @@ def _cmd_text(args: argparse.Namespace) -> int:
     """Episode text (naryad 017): draft Storyboard + transcript -> Storyboard
     with text (verbatim / condensed / described). Fills episodes[].text in
     <run_dir>/storyboard.json (user_edited episodes are preserved) and writes
-    the report text.json next to it. --mode overrides [text] mode. 0 = ok,
-    2 = the stage cannot run."""
+    the report text.json next to it. --mode overrides [text] mode; --output-lang
+    (naryad 018) overrides [text] output_lang - text differing from the source
+    language is translated through [llm]. 0 = ok, 2 = the stage cannot run."""
     from pathlib import Path as _Path
 
     from razkadr.config import load_config
@@ -370,6 +371,8 @@ def _cmd_text(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     if args.mode:
         config["text"] = {**(config.get("text") or {}), "mode": args.mode}
+    if args.output_lang:
+        config["text"] = {**(config.get("text") or {}), "output_lang": args.output_lang}
     try:
         ctx = RunContext(run_dir.parent, run_id=run_dir.name, config=config)
         storyboard, report = run_text(ctx, config)
@@ -719,6 +722,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("auto", "verbatim", "condensed", "described"),
         default=None,
         help="Text mode for all episodes (default: [text] mode, else auto)",
+    )
+    p_text.add_argument(
+        "--output-lang",
+        default=None,
+        metavar="LANG",
+        help="Target output language, BCP-47 (default: [text] output_lang, else project.output_lang; naryad No018)",
     )
     p_text.add_argument("--config", default=None, help="Path to razkadr.toml (default: search)")
     p_text.set_defaults(func=_cmd_text)

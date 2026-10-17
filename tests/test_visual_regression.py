@@ -5,8 +5,11 @@ The full render pipeline (slides document -> PPTX -> PDF -> PNG, naryads
 (tests/fixtures/visual/baseline): a layout drift beyond the pixel
 tolerance fails the test. The comparator itself is pinned by a mutation
 test (a real breakage must blow past the tolerance) and by the size
-mismatch rule. Determinism is tested end to end: two independent renders
-of the same document must be pixel-identical.
+mismatch rule. Determinism is tested within one render stack: two
+independent renders of the same document in the same environment must be
+pixel-identical (cross-stack pixel jitter between LibreOffice/poppler
+builds is absorbed by the tolerance of the baseline comparison, not by
+this check).
 
 The baselines are regenerated deliberately by
 ``scripts/regen_visual_baselines.py`` after an accepted layout change;
@@ -35,11 +38,13 @@ FIXTURES = REPO / "tests" / "fixtures" / "visual"
 BASELINES = FIXTURES / "baseline"
 TEMPLATE = REPO / "templates" / "razkadr-default.pptx"
 
-# CI runs the same LibreOffice/poppler stack as the baseline generation;
-# the measured diff on identical stacks is 0.0 (scripts/regen_visual_baselines.py
-# prints it). The tolerance exists for minor version drift of the render
-# stack (font hinting, antialiasing), not for real layout changes - moved
-# text measures tens of percent, not fractions of a percent.
+# Baselines are committed from the maintainer render stack; a CI runner may
+# carry a slightly different LibreOffice/poppler/font build, whose
+# antialiasing and hinting jitter on a fraction of a percent of pixels
+# (measured ~0.3% on the fixture deck with pixel_threshold=0). The
+# tolerance absorbs exactly that drift - real layout changes (moved text,
+# lost frames, substituted fonts) measure tens of percent, so 1% stays far
+# below any genuine breakage while leaving headroom for stack bumps.
 VISUAL_TOLERANCE = 0.01
 
 soffice = shutil.which("soffice")
@@ -97,12 +102,24 @@ def test_render_matches_committed_baselines(rendered):
             f"{actual.name} drifted from {baseline.name}: "
             f"{metrics['mismatches']}/{metrics['pixels']} px "
             f"({metrics['diff_ratio']:.5f}), max_delta={metrics['max_delta']}; "
-            "regenerate baselines only after an accepted layout change"
+            "either the layout changed (regenerate baselines with "
+            "scripts/regen_visual_baselines.py only after an accepted "
+            "change) or the render stack was bumped (LibreOffice/poppler/"
+            "fonts) and the baselines must be re-shot"
         )
 
 
-def test_render_is_pixel_deterministic_across_runs(tmp_path, slides_doc):
-    """Two independent renders of the same document are pixel-identical."""
+def test_render_is_pixel_deterministic_across_runs(rendered, tmp_path, slides_doc):
+    """Two independent renders of the same document are pixel-identical.
+
+    Determinism is a property of the pipeline within one render stack
+    (PPTX -> PDF -> PNG; isolated LibreOffice profile, naryad 024), so the
+    two renders are compared against each other - not against the committed
+    baselines. Baselines were shot on the maintainer stack; a different
+    LibreOffice/poppler build jitters on a fraction of a percent of pixels,
+    and that cross-stack drift is the job of VISUAL_TOLERANCE in
+    test_render_matches_committed_baselines, not of this exact check.
+    """
     second_pngs = deck_to_pngs(
         slides_doc,
         out_deck=tmp_path / "second.pptx",
@@ -110,13 +127,12 @@ def test_render_is_pixel_deterministic_across_runs(tmp_path, slides_doc):
         template=TEMPLATE,
         base_dir=FIXTURES,
     )
-    # compare the second render against the committed baselines with zero tolerance:
-    # the baselines were produced by the same deterministic pipeline
-    for actual, baseline in zip(second_pngs, _baseline_paths()):
-        metrics = compare_images(actual, baseline, pixel_threshold=0)
+    assert len(second_pngs) == len(rendered)
+    for first, second in zip(rendered, second_pngs):
+        metrics = compare_images(first, second, pixel_threshold=0)
         assert metrics["diff_ratio"] == 0.0, (
-            f"non-deterministic render: {actual.name} differs from baseline "
-            f"({metrics['mismatches']} px)"
+            f"non-deterministic render: {second.name} differs from the first "
+            f"render ({metrics['mismatches']} px)"
         )
 
 
@@ -146,8 +162,12 @@ def test_comparator_tolerates_small_noise(rendered, tmp_path):
     for i in range(0, image.size[0], 7):  # sparse dim pixels, delta = 10 < threshold
         pixels[i, 5] = tuple(max(0, c - 10) for c in pixels[i, 5])
     image.save(noisy)
-    metrics = compare_images(noisy, _baseline_paths()[0])
+    # compare against the same fresh render the noise was derived from, so the
+    # test pins the comparator arithmetic, not the render stack equivalence
+    # (baseline cross-stack jitter would leak into the zero-tolerance assert)
+    metrics = compare_images(noisy, rendered[0])
     assert metrics["diff_ratio"] == 0.0  # deltas below pixel_threshold never mismatch
+    assert metrics["max_delta"] == 10
 
 
 def test_comparator_size_mismatch_is_an_error(rendered, tmp_path):

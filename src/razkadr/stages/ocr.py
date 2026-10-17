@@ -67,6 +67,7 @@ import json
 import re
 from pathlib import Path
 
+from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
 from razkadr.providers.base import ProviderConfigError
 from razkadr.providers.layer import ProviderLayer
@@ -275,9 +276,7 @@ def run_ocr(ctx: RunContext, config: dict) -> dict:
         issues = validate_document(data, "ocr")
         if issues:
             raise OcrError("ocr.json failed schema validation: " + "; ".join(issues))
-        (ctx.dir / OCR_JSON).write_text(
-            json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        write_json_atomic(ctx.dir / OCR_JSON, data)
         share = (len(sent) / len(accepted)) if accepted else 0.0
         st.outputs = {
             "json": OCR_JSON,

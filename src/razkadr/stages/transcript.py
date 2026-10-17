@@ -44,6 +44,7 @@ from collections import Counter
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
 from razkadr.providers.base import ProviderConfigError
 from razkadr.providers.layer import ProviderLayer
@@ -263,9 +264,7 @@ def run_transcript(ctx: RunContext, config: dict) -> dict:
         issues = validate_document(data, "transcript")
         if issues:
             raise TranscriptError("transcript.json failed schema validation: " + "; ".join(issues))
-        (ctx.dir / TRANSCRIPT_JSON).write_text(
-            json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        write_json_atomic(ctx.dir / TRANSCRIPT_JSON, data)
         st.outputs = {
             "json": TRANSCRIPT_JSON,
             "parts": len(spans),

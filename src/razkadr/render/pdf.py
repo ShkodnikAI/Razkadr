@@ -18,6 +18,8 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
+from razkadr.atomicio import build_atomic
+
 DEFAULT_PDF_TIMEOUT_S = 120
 INSTALL_HINT = (
     "LibreOffice (soffice) not found in PATH; "
@@ -103,7 +105,7 @@ def export_pdf(deck: Path, out: Path, timeout_s: int = DEFAULT_PDF_TIMEOUT_S) ->
         if not produced.is_file() or produced.stat().st_size == 0:
             raise PdfExportError(f"LibreOffice produced no PDF for {deck.name}")
         out.parent.mkdir(parents=True, exist_ok=True)
-        if out.exists():
-            out.unlink()
-        shutil.move(str(produced), str(out))
+        # atomic: land the converted file next to the target first, then swap -
+        # a crash during the (possibly cross-device) move cannot truncate the PDF
+        build_atomic(out, lambda tmp: shutil.move(str(produced), str(tmp)), tmp_suffix=".pdf")
     return out

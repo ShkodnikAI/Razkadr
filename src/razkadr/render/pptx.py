@@ -28,6 +28,8 @@ from PIL import ImageFont
 from pptx import Presentation
 from pptx.util import Emu, Pt
 
+from razkadr.atomicio import build_atomic
+
 TEMPLATE_RELPATH = "templates/razkadr-default.pptx"
 USER_LAYOUT_PREFIX = "razkadr:"
 LINE_HEIGHT = 1.25  # conservative single-spacing estimate
@@ -657,7 +659,9 @@ def render_pptx(
         stats["pictures"] += pictures
         slide.notes_slide.notes_text_frame.text = _notes_text(slide_doc, storyboard)
         stats["slides"] += 1
-    prs.save(str(out))
+    # atomic: a crash mid-save leaves the previous deck (or none) in place,
+    # never a half-written PPTX (naryad 029)
+    build_atomic(Path(out), lambda tmp: prs.save(str(tmp)), tmp_suffix=".pptx")
     for warning in stats["warnings"]:
         print(f"razkadr render: {warning}", file=sys.stderr)
     return stats

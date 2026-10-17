@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 from razkadr import __version__
+from razkadr.atomicio import write_json_atomic
 
 EXIT_OK = 0
 EXIT_INVALID = 1
@@ -335,12 +336,8 @@ def _cmd_build(args: argparse.Namespace) -> int:
         )
         if args.lang:
             storyboard["project"]["output_lang"] = args.lang
-        (ctx.dir / "storyboard.json").write_text(
-            json.dumps(storyboard, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        (ctx.dir / "select.json").write_text(
-            json.dumps(select_report, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        write_json_atomic(ctx.dir / "storyboard.json", storyboard)
+        write_json_atomic(ctx.dir / "select.json", select_report)
 
         # text (naryad 017/018): fills episodes[].text; rewrites storyboard.json
         _storyboard, text_report = run_text(ctx, config)
@@ -403,9 +400,7 @@ def _cmd_build(args: argparse.Namespace) -> int:
         # the json artifact of the package: the validated Storyboard itself
         json_path = out_dir / "storyboard.json"
         if json_path != ctx.dir / "storyboard.json":
-            json_path.write_text(
-                json.dumps(storyboard, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-            )
+            write_json_atomic(json_path, storyboard)
     except stage_errors as exc:
         print(f"razkadr build: {exc}", file=sys.stderr)
         last = ctx.stages[-1] if ctx.stages else None
@@ -546,8 +541,8 @@ draft Storyboard without text, valid per naryad 002. Episodes marked
     out = _Path(args.out) if args.out else run_dir / "storyboard.json"
     report_path = run_dir / "select.json"
     try:
-        out.write_text(json.dumps(storyboard, ensure_ascii=False, indent=2), encoding="utf-8")
-        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_json_atomic(out, storyboard, newline=False)
+        write_json_atomic(report_path, report, newline=False)
     except OSError as exc:
         print(f"razkadr select: cannot write artifacts: {exc}", file=sys.stderr)
         return EXIT_FILE_ERROR
@@ -848,7 +843,7 @@ def _cmd_text_review(args: argparse.Namespace) -> int:
     if args.out:
         out = Path(args.out)
         try:
-            out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            write_json_atomic(out, report)
         except OSError as exc:
             print(f"razkadr text-review: cannot write report: {exc}", file=sys.stderr)
             return EXIT_FILE_ERROR

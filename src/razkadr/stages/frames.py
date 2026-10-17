@@ -32,6 +32,7 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 from pathlib import Path
 
+from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
 from razkadr.runctx import RunContext
 from razkadr.validation import validate_document
@@ -260,7 +261,7 @@ def run_frames(ctx: RunContext, config: dict) -> dict:
         issues = validate_document(data, "frames")
         if issues:
             raise FramesError("frames.json failed schema validation: " + "; ".join(issues))
-        (ctx.dir / FRAMES_JSON).write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        write_json_atomic(ctx.dir / FRAMES_JSON, data)
         n_rejected = sum(1 for e in entries if e.get("rejected"))
         logger.info(
             "frames done",

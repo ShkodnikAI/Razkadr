@@ -39,6 +39,7 @@ from collections import Counter
 from importlib import resources
 from itertools import pairwise
 
+from razkadr.atomicio import write_json_atomic
 from razkadr.log import get_logger
 from razkadr.providers.base import ProviderConfigError
 from razkadr.providers.layer import ProviderLayer
@@ -285,9 +286,7 @@ def run_chunks(ctx: RunContext, config: dict) -> dict:
         if invariant:
             raise ChunksError("internal chunking invariant violated: " + "; ".join(invariant))
 
-        (ctx.dir / CHUNKS_JSON).write_text(
-            json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        write_json_atomic(ctx.dir / CHUNKS_JSON, data)
         st.outputs = {"json": CHUNKS_JSON, "chunks": len(data["chunks"]), "method": method_used}
         logger.info(
             "chunks done",

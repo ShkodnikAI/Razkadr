@@ -113,3 +113,22 @@ razkadr export-pdf deck.pptx [--out deck.pdf] [--config razkadr.toml]
 Перед конвертацией рендер проверяет шрифты деки (slides/layouts/masters,
 без тем-шрифтов) через fontconfig: отсутствующий в системе шрифт —
 предупреждение в stderr (подмена ухудшает вид, но не блокирует экспорт).
+
+## Экспорт Google Slides (наряд №025)
+
+Дека уходит в Google Drive с конвертацией в нативные Google Slides
+(ADR-0003: PPTX — мастер-формат, Slides — производный):
+
+```bash
+export GOOGLE_OAUTH_TOKEN=<token>   # OAuth-токен владельца, scope drive.file
+razkadr export-gslides deck.pptx [--name "Имя презентации"] [--out gslinks.json] [--config razkadr.toml]
+```
+
+Механика и раздел `[google]` конфигурации — в
+[config.md](config.md#экспорт-google-slides-раздел-google-наряд-025):
+resumable-загрузка (метаданные с `mimeType = application/vnd.google-apps.presentation`,
+затем байты PPTX), результат — ссылка на презентацию; артефакт `--out`
+содержит `{file_id, name, link}`. Команда требует сеть и OAuth-токен
+владельца; в тестах CI используется stub-transport (без сети и ключей),
+ошибки API — таксономией слоя провайдеров. Проверка на реальном Google —
+за владельцем (см. limitations.md).
